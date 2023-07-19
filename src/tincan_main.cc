@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 {
   int rv = 0;
   try {
-    tp.ParseCmdlineArgs(argc, argv);
+    tp.SetCliOpts(argc, argv);
     if(tp.kVersionCheck) {
       cout << kTincanVerMjr << "." 
         << kTincanVerMnr << "." 
@@ -42,18 +42,20 @@ int main(int argc, char **argv)
         << kTincanVerBld << endl;
     }
     else if(tp.kNeedsHelp) {
-      std::cout << "-v         Version check.\n" <<
-        "-i=COUNT   Specify concurrent I/Os" << endl <<
-        "-p=PORT    Specify control port number" << endl;
+      std::cout << 
+        "-v\t\tVersion check." << endl <<
+        "-s SOCKETNAME\t\tThe Unix Domain Socket name" << endl <<
+        "-h\t\tHelp menu" << endl;
     }
     else {
+      std::cerr << "Tincan::Socketname=" << tp.socket_name << endl;
       Tincan tc;
       tc.Run();
     }
   }
   catch(exception & e) {
     rv = -1;
-    RTC_LOG(LS_ERROR) << e.what();
+    std::cerr << e.what() << endl;
   }
   return rv;
 }

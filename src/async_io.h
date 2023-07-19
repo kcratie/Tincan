@@ -23,10 +23,6 @@
 #ifndef TINCAN_ASYNCIO_H_
 #define TINCAN_ASYNCIO_H_
 #include "rtc_base/logging.h"
-#if defined(_TNC_WIN)
-#include <Winsock2.h>
-#include <minwinbase.h>
-#endif
 
 #include "tincan_base.h"
 
@@ -40,9 +36,6 @@ enum AIO_OP
 };
 
 struct AsyncIo
-#if defined(_TNC_WIN)
-  : public OVERLAPPED
-#endif // defined(_TNC_WIN)
 {
   AsyncIo() :
     buffer_to_transfer_(nullptr),
@@ -51,11 +44,7 @@ struct AsyncIo
     bytes_transferred_(0),
     flags_(AIO_READ),
     good_(true)
-  {
-#if defined(_TNC_WIN)
-    ZeroMemory(this, sizeof(OVERLAPPED));
-#endif // defined(_TNC_WIN)
-  }
+  {}
 
   AsyncIo(
     uint8_t* buffer,
@@ -69,17 +58,11 @@ struct AsyncIo
     bytes_transferred_(bytes_transferred),
     flags_(flags),
     good_(true)
-  {
-#if defined(_TNC_WIN)
-    ZeroMemory(this, sizeof(OVERLAPPED));
-#endif // defined(_TNC_WIN)
-  }
+  {}
 
   AsyncIo(AsyncIo & rhs);
 
-#if !defined(_TNC_WIN)
   virtual ~AsyncIo() = default;
-#endif // defined(_TNC_WIN)
 
   void Initialize(
     uint8_t* buffer_to_transfer,

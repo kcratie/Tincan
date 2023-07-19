@@ -29,23 +29,23 @@ namespace tincan
 {
 using namespace rtc;
 ControlDispatch::ControlDispatch() :
-  dtol_(nullptr),
+//   dtol_(nullptr),
   ctrl_link_(new DisconnectedControllerHandle())
 {
   control_map_ = {
     { "ConfigureLogging", &ControlDispatch::ConfigureLogging },
-    { "CreateCtrlRespLink", &ControlDispatch::CreateControllerRespLink },
+    // { "CreateCtrlRespLink", &ControlDispatch::CreateControllerRespLink },
     { "CreateLink", &ControlDispatch::CreateLink },
     { "CreateTunnel", &ControlDispatch::CreateTunnel },
     { "Echo", &ControlDispatch::Echo },
-    { "SendIcc", &ControlDispatch::SendIcc },
-    { "InjectFrame", &ControlDispatch::InjectFrame },
+    // { "SendIcc", &ControlDispatch::SendIcc },
+    // { "InjectFrame", &ControlDispatch::InjectFrame },
     { "QueryCandidateAddressSet", &ControlDispatch::QueryCandidateAddressSet },
     { "QueryLinkStats", &ControlDispatch::QueryLinkStats },
     { "QueryTunnelInfo", &ControlDispatch::QueryTunnelInfo },
     { "RemoveTunnel", &ControlDispatch::RemoveTunnel },
     { "RemoveLink", &ControlDispatch::RemoveLink },
-    { "UpdateMap", &ControlDispatch::UpdateRouteTable },
+    // { "UpdateMap", &ControlDispatch::UpdateRouteTable },
   };
 }
 ControlDispatch::~ControlDispatch()
@@ -65,36 +65,39 @@ ControlDispatch::operator () (TincanControl & control)
     // todo: A controller response to something sent earlier
       break;
     default:
-      RTC_LOG(LS_WARNING) << "Unrecognized control type received and discarded.";
+      std::cerr << "Unrecognized control type received and discarded.";
+    //   RTC_LOG(LS_WARNING) << "Unrecognized control type received and discarded.";
       break;
     }
   }
   catch(out_of_range & e) {
-    RTC_LOG(LS_WARNING) << "An invalid EVIO control operation was received and "
+    // RTC_LOG(LS_WARNING) << "An invalid EVIO control operation was received and "
+    std::cerr << "An invalid EVIO control operation was received and "
       "discarded: " << control.StyledString() << "Exception=" << e.what();
   }
   catch(exception & e)
   {
-    RTC_LOG(LS_WARNING) << e.what();
+   std::cerr << e.what();
+    // RTC_LOG(LS_WARNING) << e.what();
   }
 }
 void
-ControlDispatch::SetDispatchToTincanInf(
+ControlDispatch::SetTincanDispatchInterface(
   TincanDispatchInterface * dtot)
 {
   tincan_ = dtot;
 }
 void
-ControlDispatch::SetDispatchToListenerInf(
-  DispatchToListenerInf * dtol)
+ControlDispatch::SetCommsChannelInterface(CommsChannel * cch)
 {
-  dtol_ = dtol;
+  ctrl_link_ = cch;
 }
 
 void
 ControlDispatch::ConfigureLogging(
   TincanControl & control)
 {
+    std::cout << "LOGGER CONFIG" <<endl;
   Json::Value & req = control.GetRequest();
   string log_lvl = req[TincanControl::Level].asString();
   string msg("Tincan logging successfully configured.");
@@ -175,32 +178,32 @@ ControlDispatch::CreateLink(
   } //else respond when CAS is available
 }
 
-void ControlDispatch::CreateControllerRespLink(
-  TincanControl & control)
-{
-  Json::Value & req = control.GetRequest();
-  string ip = req["IP"].asString();
-  int port = req["Port"].asInt();
-  string msg("Controller endpoint successfully created.");
-  lock_guard<mutex> lg(disp_mutex_);
-  try
-  {
-    unique_ptr<SocketAddress> ctrl_addr(new SocketAddress(ip, port));
-    dtol_->CreateControllerLink(move(ctrl_addr));
-    delete ctrl_link_;
-    ctrl_link_ = &dtol_->GetControllerLink();
-    tincan_->SetControllerLink(ctrl_link_);
-    control.SetResponse(msg, true);
-    ctrl_link_->Deliver(control);
-  }
-  catch(exception & e)
-  {
-    //if this fails we can't indicate this to the controller so log with
-    //high severity
-    RTC_LOG(LS_ERROR) << e.what() << ". Control Data=\n" <<
-      control.StyledString();
-  }
-}
+// void ControlDispatch::CreateControllerRespLink(
+//   TincanControl & control)
+// {
+//   Json::Value & req = control.GetRequest();
+//   string ip = req["IP"].asString();
+//   int port = req["Port"].asInt();
+//   string msg("Controller endpoint successfully created.");
+//   lock_guard<mutex> lg(disp_mutex_);
+//   try
+//   {
+//     unique_ptr<SocketAddress> ctrl_addr(new SocketAddress(ip, port));
+//     dtol_->CreateControllerLink(move(ctrl_addr));
+//     delete ctrl_link_;
+//     ctrl_link_ = &dtol_->GetControllerLink();
+//     tincan_->SetControllerLink(ctrl_link_);
+//     control.SetResponse(msg, true);
+//     ctrl_link_->Deliver(control);
+//   }
+//   catch(exception & e)
+//   {
+//     //if this fails we can't indicate this to the controller so log with
+//     //high severity
+//     RTC_LOG(LS_ERROR) << e.what() << ". Control Data=\n" <<
+//       control.StyledString();
+//   }
+// }
 
 void
 ControlDispatch::CreateTunnel(
@@ -227,6 +230,7 @@ ControlDispatch::CreateTunnel(
 
 void ControlDispatch::Echo(TincanControl & control)
 {
+    std::cout << "ECHO TEST" << endl;
   Json::Value & req = control.GetRequest();
   string msg = req[TincanControl::Message].asString();
   control.SetResponse(msg, true);
@@ -258,27 +262,27 @@ ControlDispatch::GetLogLevel(
   return lv;
 }
 
-void
-ControlDispatch::InjectFrame(
-  TincanControl & control)
-{
-  Json::Value & req = control.GetRequest();
-  string msg = "InjectFrame failed.";
-  bool status = false;
-  lock_guard<mutex> lg(disp_mutex_);
-  try
-  {
-    tincan_->InjectFrame(req);
-    msg = "InjectFrame succeeded.";
-    status = true;
-  } catch(exception & e)
-  {
-    RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n" <<
-      control.StyledString();
-  }
-  control.SetResponse(msg, status);
-  ctrl_link_->Deliver(control);
-}
+// void
+// ControlDispatch::InjectFrame(
+//   TincanControl & control)
+// {
+//   Json::Value & req = control.GetRequest();
+//   string msg = "InjectFrame failed.";
+//   bool status = false;
+//   lock_guard<mutex> lg(disp_mutex_);
+//   try
+//   {
+//     tincan_->InjectFrame(req);
+//     msg = "InjectFrame succeeded.";
+//     status = true;
+//   } catch(exception & e)
+//   {
+//     RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n" <<
+//       control.StyledString();
+//   }
+//   control.SetResponse(msg, status);
+//   ctrl_link_->Deliver(control);
+// }
 
 void
 ControlDispatch::QueryCandidateAddressSet(
@@ -397,45 +401,45 @@ ControlDispatch::RemoveTunnel(
   ctrl_link_->Deliver(control);
 }
 
-void
-ControlDispatch::SendIcc(
-  TincanControl & control)
-{
-  Json::Value & req = control.GetRequest();
-  string msg("The ICC operation succeeded");
-  lock_guard<mutex> lg(disp_mutex_);
-  try
-  {
-    tincan_->SendIcc(req);
-  } catch(exception & e)
-  {
-    msg = "The ICC operation failed.";
-    RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n" <<
-      control.StyledString();
-    control.SetResponse(msg, false);
-    ctrl_link_->Deliver(control);
-  }
-}
+// void
+// ControlDispatch::SendIcc(
+//   TincanControl & control)
+// {
+//   Json::Value & req = control.GetRequest();
+//   string msg("The ICC operation succeeded");
+//   lock_guard<mutex> lg(disp_mutex_);
+//   try
+//   {
+//     tincan_->SendIcc(req);
+//   } catch(exception & e)
+//   {
+//     msg = "The ICC operation failed.";
+//     RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n" <<
+//       control.StyledString();
+//     control.SetResponse(msg, false);
+//     ctrl_link_->Deliver(control);
+//   }
+// }
 
-void
-ControlDispatch::UpdateRouteTable(
-  TincanControl & control)
-{
-  bool status = false;
-  Json::Value & req = control.GetRequest();
-  string msg = "The Add Routes operation failed.";
-  lock_guard<mutex> lg(disp_mutex_);
-  try
-  {
-    tincan_->UpdateRouteTable(req);
-    status = true;
-    msg = "The Add Routes opertation completed successfully.";
-  } catch(exception & e)
-  {
-    RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n" <<
-      control.StyledString();
-  }
-  control.SetResponse(msg, status);
-  ctrl_link_->Deliver(control);
-}
+// void
+// ControlDispatch::UpdateRouteTable(
+//   TincanControl & control)
+// {
+//   bool status = false;
+//   Json::Value & req = control.GetRequest();
+//   string msg = "The Add Routes operation failed.";
+//   lock_guard<mutex> lg(disp_mutex_);
+//   try
+//   {
+//     tincan_->UpdateRouteTable(req);
+//     status = true;
+//     msg = "The Add Routes opertation completed successfully.";
+//   } catch(exception & e)
+//   {
+//     RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n" <<
+//       control.StyledString();
+//   }
+//   control.SetResponse(msg, status);
+//   ctrl_link_->Deliver(control);
+// }
 }  // namespace tincan

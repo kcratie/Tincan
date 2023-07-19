@@ -31,6 +31,8 @@
 #include "controller_handle.h"
 #include "tap_frame.h"
 #include "tincan_control.h"
+#include "controller_comms.h"
+
 namespace tincan
 {
 using rtc::FileRotatingLogSink;
@@ -41,43 +43,45 @@ public:
   ControlDispatch();
   ~ControlDispatch();
   void operator () (TincanControl & control);
-  void SetDispatchToTincanInf(TincanDispatchInterface * dtot);
-  void SetDispatchToListenerInf(DispatchToListenerInf * dtol);
+  void SetTincanDispatchInterface(TincanDispatchInterface * dtot);
+   void SetCommsChannelInterface(CommsChannel * cch);
 
 private:
   void ConfigureLogging(TincanControl & control);
   void CreateLink(TincanControl & control);
-  void CreateControllerRespLink(TincanControl & control);
+//   void CreateControllerRespLink(TincanControl & control);
   void CreateTunnel(TincanControl & control);
   void Echo(TincanControl & control);
-  void InjectFrame(TincanControl & control);
+//   void InjectFrame(TincanControl & control);
   void QueryLinkStats(TincanControl & control);
   void QueryTunnelInfo(TincanControl & control);
   void QueryCandidateAddressSet(TincanControl & control);
   void RemoveLink(TincanControl & control);
   void RemoveTunnel(TincanControl & control);
-  void UpdateRouteTable(TincanControl & control);
+//   void UpdateRouteTable(TincanControl & control);
   LoggingSeverity GetLogLevel(const string & log_level);
-  void SendIcc(TincanControl & control);
+//   void SendIcc(TincanControl & control);
 
   map<string, void (ControlDispatch::*)(TincanControl & control)>control_map_;
-  DispatchToListenerInf * dtol_;
+//   DispatchToListenerInf * dtol_;
   TincanDispatchInterface * tincan_;
-  ControllerLink * ctrl_link_;
+  CommsChannel * ctrl_link_;
   mutex disp_mutex_;
   unique_ptr<FileRotatingLogSink> log_sink_;
-  class DisconnectedControllerHandle : virtual public ControllerLink {
+  class DisconnectedControllerHandle : virtual public CommsChannel {
   public:
     DisconnectedControllerHandle() {
       msg_ = "No connection to Controller exists. "
         "Create one with the set_ctrl_endpoint control operation";
     }
-    ~DisconnectedControllerHandle() override = default;
+    virtual ~DisconnectedControllerHandle() override = default;
   private:
-    void Deliver(
+    virtual void Deliver(
       TincanControl &) override {}
-    void Deliver(
+    virtual void Deliver(
       unique_ptr<TincanControl>) override {}
+    virtual void Send(unique_ptr<string> msg) override {}
+    virtual void Close() override {}
     string msg_;
   };
 }; // ControlDispatch

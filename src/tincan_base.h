@@ -50,6 +50,7 @@ namespace tincan
   using IP4AddressType = std::array<uint8_t, 4>;
   //using namespace std;
   using std::array;
+  using std::deque;
   using std::chrono::milliseconds;
   using std::chrono::steady_clock;
   using std::cout;
@@ -74,85 +75,61 @@ namespace tincan
   using std::stack;
   using std::string;
   using std::stringstream;
+  using std::thread;
   using std::unique_ptr;
   using std::unordered_map;
   using std::vector;
 
 
+class InputParser{
+    public:
+        InputParser (int &argc, char **argv){
+            for (int i=1; i < argc; ++i)
+                this->tokens.push_back(std::string(argv[i]));
+        }
+        
+        const std::string& getCmdOption(const std::string &option) const{
+            std::vector<std::string>::const_iterator itr;
+            itr =  std::find(this->tokens.begin(), this->tokens.end(), option);
+            if (itr != this->tokens.end() && ++itr != this->tokens.end()){
+                return *itr;
+            }
+            static const std::string empty_string("");
+            return empty_string;
+        }
+        
+        bool cmdOptionExists(const std::string &option) const{
+            return std::find(this->tokens.begin(), this->tokens.end(), option)
+                   != this->tokens.end();
+        }
+    private:
+        std::vector <std::string> tokens;
+};
   struct TincanParameters
   {
   public:
     TincanParameters()
       : kVersionCheck(false), kNeedsHelp(false), kUdpPort(5800), kLinkConcurrentAIO(2)
     {}
-
-    void ParseCmdlineArgs(
+    void SetCliOpts(
       int argc,
-      char **args)
+      char **argv)
     {
-      for (int i = 1; i < argc; i++)
-      {
-        if (strncmp(args[i], "-p=", 3) == 0)
+        InputParser cli(argc, argv);
+        if(cli.cmdOptionExists("-h"))
         {
-          istringstream stream(args[i]);
-          stream.ignore(3);
-          int port;
-          char c;
-          if (!(stream >> port) || stream.get(c))
-          {
             kNeedsHelp = true;
-            break;
-          }
-          else
-          {
-            if (port >= 0 && port <= UINT16_MAX)
-            {
-              kUdpPort = static_cast<uint16_t>(port);
-            }
-            else
-            {
-              kNeedsHelp = true;
-              break;
-            }
-          }
+            return;
         }
-        else if (strncmp(args[i], "-i=", 3) == 0)
+        if(cli.cmdOptionExists("-v"))
         {
-          istringstream stream(args[i]);
-          stream.ignore(3);
-          int count;
-          char c;
-          if (!(stream >> count) || stream.get(c))
-          {
+            kVersionCheck = true;
+            return;
+        }
+        socket_name = cli.getCmdOption("-s");
+        if (socket_name.empty()){
             kNeedsHelp = true;
-            break;
-          }
-          else
-          {
-            if (count > 32)
-            {
-              kLinkConcurrentAIO = 32;
-            }
-            else if (count < 0)
-            {
-              kNeedsHelp = true;
-              break;
-            }
-            else
-            {
-              kLinkConcurrentAIO = static_cast<uint8_t>(count);
-            }
-          }
         }
-        else if (strncmp(args[i], "-v", 2) == 0)
-        {
-          kVersionCheck = true;
-        }
-        else
-        {
-          kNeedsHelp = true;
-        }
-      }
     }
     static const uint16_t kMaxMtuSize = 1500;
     static const uint16_t kTapHeaderSize = 2;
@@ -173,6 +150,7 @@ namespace tincan
     bool kVersionCheck;
     bool kNeedsHelp;
     uint16_t kUdpPort;
+    string socket_name;
     uint8_t kLinkConcurrentAIO;
   };
   ///////////////////////////////////////////////////////////////////////////////

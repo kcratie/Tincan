@@ -28,7 +28,7 @@ namespace tincan
   extern TincanParameters tp;
   BasicTunnel::BasicTunnel(
   unique_ptr<TunnelDescriptor> descriptor,
-  ControllerLink * ctrl_handle,
+  shared_ptr<CommsChannel> ctrl_handle,
     TunnelThreads *thread_pool) :
   tdev_(nullptr),
   descriptor_(move(descriptor)),
@@ -266,30 +266,30 @@ void BasicTunnel::OnMessage(Message * msg)
   }
 }
 
-void
-BasicTunnel::InjectFame(
-  string && data)
-{
-  unique_ptr<TapFrame> tf = make_unique<TapFrame>();
-  tf->Initialize();
-  if(data.length() > 2 * tp.kTapBufferSize)
-  {
-    stringstream oss;
-    oss << "Inject Frame operation failed - frame size " << data.length() / 2
-      << " is larger than maximum accepted " << tp.kTapBufferSize;
-    throw TCEXCEPT(oss.str().c_str());
-  }
-  size_t len = StringToByteArray(data, tf->Payload(), tf->End());
-  if(len != data.length() / 2)
-    throw TCEXCEPT("Inject Frame operation failed - ICC decode failure");
-  tf->SetWriteOp();
-  tf->PayloadLength((uint32_t)len);
-  tf->BufferToTransfer(tf->Payload());
-  tf->BytesTransferred((uint32_t)len);
-  tf->BytesToTransfer((uint32_t)len);
-  TapMessageData *tp_ = new TapMessageData(move(tf));
-  TapThread()->Post(RTC_FROM_HERE, this, MSGID_TAP_WRITE, tp_);
+// void
+// BasicTunnel::InjectFame(
+//   string && data)
+// {
+//   unique_ptr<TapFrame> tf = make_unique<TapFrame>();
+//   tf->Initialize();
+//   if(data.length() > 2 * tp.kTapBufferSize)
+//   {
+//     stringstream oss;
+//     oss << "Inject Frame operation failed - frame size " << data.length() / 2
+//       << " is larger than maximum accepted " << tp.kTapBufferSize;
+//     throw TCEXCEPT(oss.str().c_str());
+//   }
+//   size_t len = StringToByteArray(data, tf->Payload(), tf->End());
+//   if(len != data.length() / 2)
+//     throw TCEXCEPT("Inject Frame operation failed - ICC decode failure");
+//   tf->SetWriteOp();
+//   tf->PayloadLength((uint32_t)len);
+//   tf->BufferToTransfer(tf->Payload());
+//   tf->BytesTransferred((uint32_t)len);
+//   tf->BytesToTransfer((uint32_t)len);
+//   TapMessageData *tp_ = new TapMessageData(move(tf));
+//   TapThread()->Post(RTC_FROM_HERE, this, MSGID_TAP_WRITE, tp_);
 
-  //RTC_LOG(LS_INFO) << "Frame injected=\n" << data;
-}
+//   //RTC_LOG(LS_INFO) << "Frame injected=\n" << data;
+// }
 } //namespace tincan

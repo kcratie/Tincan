@@ -23,19 +23,9 @@
 #ifndef TINCAN_TAPDEV_H_
 #define TINCAN_TAPDEV_H_
 
-#if defined(_TNC_LINUX)
 #include "linux/tapdev_lnx.h"
-#elif defined(_TNC_WIN)
-#include "windows/tapdev_win.h"
-#endif
 
 namespace tincan {
-//class TapDev : public
-#if defined(_TNC_LINUX)
 using TapDev = linux::TapDevLnx;
-#elif defined(_TNC_WIN)
-using TapDev = windows::TapDevWin;
-#endif
-//{};
 }  // namespace tincan
 #endif  // TINCAN_TAPDEV_H_

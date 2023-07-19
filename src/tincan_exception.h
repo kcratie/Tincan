@@ -23,17 +23,9 @@
 #ifndef TINCAN_EXCEPTION_H_
 #define TINCAN_EXCEPTION_H_
 
-#if defined(_TNC_LINUX)
 #include "linux/lnx_exception.h"
-#elif defined(_TNC_WIN)
-#include "windows/win_exception.h"
-#endif
 
 namespace tincan {
-#if defined(_TNC_LINUX)
 #define TCEXCEPT(ExtendedErrorInfo) linux::LNXEXCEPT(ExtendedErrorInfo)
-#elif defined(_TNC_WIN)
-#define TCEXCEPT(ExtendedErrorInfo) windows::WINEXCEPT(ExtendedErrorInfo)
-#endif
 } // namespace tincan
 #endif  // TINCAN_EXCEPTION_H_

@@ -26,25 +26,25 @@
 #include "tincan_control.h"
 
 namespace tincan {
-  class ControllerLink
-  {
-  public:
-    virtual ~ControllerLink() = default;
-    virtual void Deliver(
-      TincanControl & ctrl_resp) = 0;
+//   class ControllerLink
+//   {
+//   public:
+//     virtual ~ControllerLink() = default;
+//     virtual void Deliver(
+//       TincanControl & ctrl_resp) = 0;
 
-    virtual void Deliver(
-      unique_ptr<TincanControl> ctrl_resp) = 0;
-  };
+//     virtual void Deliver(
+//       unique_ptr<TincanControl> ctrl_resp) = 0;
+//   };
 
-  class DispatchToListenerInf
-  {
-  public:
-    virtual ~DispatchToListenerInf() = default;
-    virtual void CreateControllerLink(
-      unique_ptr<SocketAddress> controller_addr) = 0;
-    virtual ControllerLink & GetControllerLink() = 0;
-  };
+//   class DispatchToListenerInf
+//   {
+//   public:
+//     virtual ~DispatchToListenerInf() = default;
+//     virtual void CreateControllerLink(
+//       unique_ptr<SocketAddress> controller_addr) = 0;
+//     virtual ControllerLink & GetControllerLink() = 0;
+//   };
 
   class TincanDispatchInterface
   {
@@ -59,8 +59,8 @@ namespace tincan {
       const Json::Value & link_desc,
       const TincanControl & control) = 0;
 
-    virtual void InjectFrame(
-      const Json::Value & frame_desc) = 0;
+    // virtual void InjectFrame(
+    //   const Json::Value & frame_desc) = 0;
 
     virtual void QueryLinkStats(
       const Json::Value & link_desc,
@@ -80,14 +80,14 @@ namespace tincan {
     virtual void RemoveVlink(
       const Json::Value & link_desc) = 0;
 
-    virtual void SendIcc(
-      const Json::Value & icc_desc) = 0;
+    // virtual void SendIcc(
+    //   const Json::Value & icc_desc) = 0;
 
-    virtual void SetControllerLink(
-      ControllerLink * ctrl_link) = 0;
+    // virtual void SetControllerLink(
+    //   ControllerLink * ctrl_link) = 0;
 
-    virtual void UpdateRouteTable(
-      const Json::Value & rts_desc) = 0;
+    // virtual void UpdateRouteTable(
+    //   const Json::Value & rts_desc) = 0;
 };
 }  // namespace tincan
 #endif  // TINCAN_CONTROLLER_HANDLE_H_

@@ -33,13 +33,14 @@
 #include "rtc_base/third_party/sigslot/sigslot.h"
 #include "rtc_base/strings/json.h"
 #include "async_io.h"
-#include "controller_handle.h"
+// #include "controller_handle.h"
 #include "tapdev.h"
 #include "tap_frame.h"
 #include "tincan_exception.h"
 #include "tunnel_descriptor.h"
 #include "virtual_link.h"
 #include "tunnel_threads.h"
+#include "controller_comms.h"
 namespace tincan
 {
 class BasicTunnel :
@@ -96,7 +97,7 @@ public:
 
   BasicTunnel(
     unique_ptr<TunnelDescriptor> descriptor,
-    ControllerLink * ctrl_handle,
+    shared_ptr<CommsChannel> ctrl_handle,
     TunnelThreads *thread_pool);
 
   virtual ~BasicTunnel();
@@ -113,8 +114,8 @@ public:
  
   virtual string Fingerprint();
 
-  virtual void InjectFame(
-    string && data);
+//   virtual void InjectFame(
+//     string && data);
 
   virtual string Name();
 
@@ -134,9 +135,9 @@ public:
     const string & vlink_id,
     Json::Value & cas_info) = 0;
 
-  virtual void SendIcc(
-    const string & vlink_id,
-    const string & data) = 0;
+//   virtual void SendIcc(
+//     const string & vlink_id,
+//     const string & data) = 0;
 
   virtual void Shutdown();
 
@@ -149,8 +150,8 @@ public:
   virtual void RemoveLink(
     const string & vlink_id) = 0;
 
-  virtual void UpdateRouteTable(
-    const Json::Value & rt_descr) = 0;
+//   virtual void UpdateRouteTable(
+//     const Json::Value & rt_descr) = 0;
 
   //
   //FrameHandler implementation
@@ -186,7 +187,7 @@ protected:
   unique_ptr<TapDev> tdev_;
   unique_ptr<TapDescriptor> tap_desc_;
   unique_ptr<TunnelDescriptor> descriptor_;
-  ControllerLink * ctrl_link_;
+  shared_ptr<CommsChannel> ctrl_link_;
   unique_ptr<rtc::SSLIdentity> sslid_;
   unique_ptr<rtc::SSLFingerprint> local_fingerprint_;
   TunnelThreads *thread_pool_;

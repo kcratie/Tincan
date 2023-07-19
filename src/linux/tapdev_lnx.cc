@@ -21,7 +21,6 @@
 * THE SOFTWARE.
 */
 
-#if defined (_TNC_LINUX)
 #include "tapdev_lnx.h"
 #include "tincan_exception.h"
 #include <sys/types.h>
@@ -274,4 +273,3 @@ TapDevLnx::FileDesc()
 
 } // linux
 } // tincan
-#endif // _TNC_LINUX

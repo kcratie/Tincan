@@ -22,7 +22,6 @@
 */
 #ifndef TINCAN_TAPDEV_LNX_H_
 #define TINCAN_TAPDEV_LNX_H_
-#if defined (_TNC_LINUX)
 
 #include "async_io.h"
 #include "tapdev_inf.h"
@@ -88,5 +87,4 @@ private:
 };
 }
 }
-#endif //_TNC_LINUX
 #endif 

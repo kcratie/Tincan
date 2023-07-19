@@ -1,0 +1,10 @@
+out/
+.vscode/
+.devcontainer/
+*.so
+*.o
+*.log
+
+build/
+BUILD.gn
+src/windows/

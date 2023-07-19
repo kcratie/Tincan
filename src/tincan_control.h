@@ -39,7 +39,7 @@ enum ControlTypeEnum
   CTInvalid,
   CTMax = CTInvalid,
 };
-const array<const char*, 3> ControlTypeStrings = { {"TincanRequest", "TincanResponse", "control type invalid"} };
+const array<const char*, 3> ControlTypeStrings = { {TincanControl::Request, TincanControl::Response, "Invalid"} };
 
   TincanControl();
   TincanControl(unique_ptr<Json::Value> req);
@@ -67,6 +67,7 @@ const array<const char*, 3> ControlTypeStrings = { {"TincanRequest", "TincanResp
   ControlTypeEnum GetControlType() const;
   void SetControlType(ControlTypeEnum type);
 
+  void SetRecipient(const string& recipient);
   string StyledString();
 
   static uint64_t NextTagValue()
@@ -83,7 +84,6 @@ const array<const char*, 3> ControlTypeStrings = { {"TincanRequest", "TincanResp
   static const Json::StaticString CreateCtrlRespLink;
   static const Json::StaticString CreateTunnel;
   static const Json::StaticString Data;
-  static const Json::StaticString DisableDtls;
   static const Json::StaticString Echo;
   static const Json::StaticString EncryptionEnabled;
   static const Json::StaticString FPR;
@@ -105,7 +105,7 @@ const array<const char*, 3> ControlTypeStrings = { {"TincanRequest", "TincanResp
   static const Json::StaticString QueryTunnelInfo;
   static const Json::StaticString QueryCandidateAddressSet;
   static const Json::StaticString Recipient;
-  static const Json::StaticString RecipientMac;
+  static const Json::StaticString RegisterDataplane;
   static const Json::StaticString RemoveTunnel;
   static const Json::StaticString ReqRouteUpdate;
   static const Json::StaticString Request;
@@ -117,8 +117,6 @@ const array<const char*, 3> ControlTypeStrings = { {"TincanRequest", "TincanResp
   static const Json::StaticString Stats;
   static const Json::StaticString Status;
   static const Json::StaticString Success;
-  static const Json::StaticString TincanRequest;
-  static const Json::StaticString TincanResponse;
   static const Json::StaticString TransactionId;
   static const Json::StaticString TunnelId;
   static const Json::StaticString Type;

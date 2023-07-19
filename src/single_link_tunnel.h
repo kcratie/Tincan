@@ -33,7 +33,7 @@ class SingleLinkTunnel :
 public:
   SingleLinkTunnel(
     unique_ptr<TunnelDescriptor> descriptor,
-    ControllerLink * ctrl_handle,
+    shared_ptr<CommsChannel> ctrl_handle,
     TunnelThreads *thread_pool);
   virtual ~SingleLinkTunnel() = default;
 
@@ -55,9 +55,9 @@ public:
     const string & vlink_id,
     Json::Value & vlink_info) override;
 
-  void SendIcc(
-    const string & recipient_mac,
-    const string & data) override;
+//   void SendIcc(
+//     const string & recipient_mac,
+//     const string & data) override;
 
   //void Start();
 
@@ -70,8 +70,8 @@ public:
   void RemoveLink(
     const string & vlink_id) override;
 
-  void UpdateRouteTable(
-    const Json::Value & rt_descr) override;
+//   void UpdateRouteTable(
+//     const Json::Value & rt_descr) override;
 
   //
   //FrameHandler implementation

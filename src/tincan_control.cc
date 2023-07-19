@@ -34,7 +34,6 @@ const Json::StaticString TincanControl::Controlling("Controlling");
 const Json::StaticString TincanControl::CreateCtrlRespLink("CreateCtrlRespLink");
 const Json::StaticString TincanControl::CreateTunnel("CreateTunnel");
 const Json::StaticString TincanControl::Data("Data");
-const Json::StaticString TincanControl::DisableDtls("DisableDtls");
 const Json::StaticString TincanControl::Echo("Echo");
 const Json::StaticString TincanControl::EncryptionEnabled("EncryptionEnabled");
 const Json::StaticString TincanControl::FPR("FPR");
@@ -54,8 +53,10 @@ const Json::StaticString TincanControl::PeerInfo("PeerInfo");
 const Json::StaticString TincanControl::ProtocolVersion("ProtocolVersion");
 const Json::StaticString TincanControl::QueryTunnelInfo("QueryTunnelInfo");
 const Json::StaticString TincanControl::QueryCandidateAddressSet("QueryCandidateAddressSet");
+const Json::StaticString TincanControl::RegisterDataplane("RegisterDataplane");
 const Json::StaticString TincanControl::RemoveTunnel("RemoveTunnel");
 const Json::StaticString TincanControl::ReqRouteUpdate("ReqRouteUpdate");
+const Json::StaticString TincanControl::Recipient("Recipient");
 const Json::StaticString TincanControl::Request("Request");
 const Json::StaticString TincanControl::Response("Response");
 const Json::StaticString TincanControl::Role("Role");
@@ -65,8 +66,8 @@ const Json::StaticString TincanControl::Stats("Stats");
 const Json::StaticString TincanControl::Status("Status");
 const Json::StaticString TincanControl::Success("Success");
 const Json::StaticString TincanControl::TapName("TapName");
-const Json::StaticString TincanControl::TincanRequest("TincanRequest");
-const Json::StaticString TincanControl::TincanResponse("TincanResponse");
+// const Json::StaticString TincanControl::Request("Request");
+// const Json::StaticString TincanControl::Response("Response");
 const Json::StaticString TincanControl::TransactionId("TransactionId");
 const Json::StaticString TincanControl::TunnelId("TunnelId");
 const Json::StaticString TincanControl::Type("Type");
@@ -120,14 +121,14 @@ TincanControl::TincanControl(
     errmsg.append(req_data, req_data + len);
     throw TCEXCEPT(errmsg.c_str());
   }
-  if(ctrl[EVIO].isNull() || ctrl[EVIO].empty())
+  if(ctrl.isNull() || ctrl.empty())
   {
     ostringstream oss;
     oss << "The control is invalid, the'EVIO' header is missing" << endl
       << req_data;
     throw TCEXCEPT(oss.str().c_str());
   }
-  uint32_t ver = ctrl[EVIO][ProtocolVersion].asUInt();
+  uint32_t ver = ctrl[ProtocolVersion].asUInt();
   if(ver != kTincanControlVer)
   {
     ostringstream oss;
@@ -135,7 +136,7 @@ TincanControl::TincanControl(
     throw TCEXCEPT(oss.str().c_str());
   }
   proto_ver_ = ver;
-  string ct = ctrl[EVIO][ControlType].asString();
+  string ct = ctrl[ControlType].asString();
   if(ct == ControlTypeStrings[CTTincanRequest])
   {
     type_ = CTTincanRequest;
@@ -148,17 +149,17 @@ TincanControl::TincanControl(
   {
     throw TCEXCEPT("Invalid control type");
   }
-  tag_ = ctrl[EVIO][TransactionId].asInt64();
-  if(ctrl[EVIO].isMember(Request))
+  tag_ = ctrl[TransactionId].asInt64();
+  if(ctrl.isMember(Request))
   {
     Json::Value removed_mem;
-    bool status = ctrl[EVIO].removeMember(Request, &removed_mem);
+    bool status = ctrl.removeMember(Request, &removed_mem);
     if(status == true)
     	(*dict_req_) = removed_mem;    
   }
-  if(ctrl[EVIO].isMember(Response)) {
+  if(ctrl.isMember(Response)) {
     Json::Value removed_mem;
-    bool status = ctrl[EVIO].removeMember(Response, &removed_mem);
+    bool status = ctrl.removeMember(Response, &removed_mem);
     if(status == true)
     	(*dict_resp_) = removed_mem;    
   }
@@ -233,13 +234,13 @@ string
 TincanControl::StyledString()
 {
   Json::Value ctrl(Json::objectValue);
-  ctrl[EVIO][ProtocolVersion] = proto_ver_;
-  ctrl[EVIO][TransactionId] = (Json::UInt64)tag_;
-  ctrl[EVIO][ControlType] = ControlTypeStrings[type_];
+  ctrl[ProtocolVersion] = proto_ver_;
+  ctrl[TransactionId] = (Json::UInt64)tag_;
+  ctrl[ControlType] = ControlTypeStrings[type_];
   if(dict_req_)
-    ctrl[EVIO][Request] = *dict_req_;
+    ctrl[Request] = *dict_req_;
   if(dict_resp_)
-    ctrl[EVIO][Response] = *dict_resp_;
+    ctrl[Response] = *dict_resp_;
   return ctrl.toStyledString();
 }
 
@@ -325,6 +326,24 @@ TincanControl::GetControlType() const
 void TincanControl::SetControlType(ControlTypeEnum type)
 {
   type_ = type;
+}
+
+void TincanControl::SetRecipient(const string& recipient)
+{
+    if(type_ == CTTincanRequest)
+    {
+        (*dict_req_)[Recipient] = recipient;
+    }
+    else if (type_ == CTTincanResponse)
+    {
+        (*dict_resp_)[Recipient] = recipient;
+    }
+    else
+    {
+         ostringstream oss;
+        oss << "Invalid tincan control type" << type_;
+        throw TCEXCEPT(oss.str().c_str());
+    }
 }
 
 } // namespace tincan

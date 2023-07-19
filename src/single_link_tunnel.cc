@@ -28,7 +28,7 @@ namespace tincan
 {
 SingleLinkTunnel::SingleLinkTunnel(
   unique_ptr<TunnelDescriptor> descriptor,
-  ControllerLink * ctrl_handle,
+  shared_ptr<CommsChannel> ctrl_handle,
   TunnelThreads *thread_pool) :
   BasicTunnel(move(descriptor), ctrl_handle, thread_pool)
 {}
@@ -125,20 +125,20 @@ void SingleLinkTunnel::QueryLinkInfo(
 
 }
 
-void SingleLinkTunnel::SendIcc(
-  const string & vlink_id,
-  const string & data)
-{
-  if(!vlink_ || vlink_->Id() != vlink_id)
-    throw TCEXCEPT("No vlink exists by the specified id");
-  unique_ptr<IccMessage> icc = make_unique<IccMessage>();
-  icc->Message((uint8_t*)data.c_str(), (uint16_t)data.length());
-  unique_ptr<TransmitMsgData> md = make_unique<TransmitMsgData>();
-  md->frm = move(icc);
-  md->vl = vlink_;
-  NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_SEND_ICC, md.release());
+// void SingleLinkTunnel::SendIcc(
+//   const string & vlink_id,
+//   const string & data)
+// {
+//   if(!vlink_ || vlink_->Id() != vlink_id)
+//     throw TCEXCEPT("No vlink exists by the specified id");
+//   unique_ptr<IccMessage> icc = make_unique<IccMessage>();
+//   icc->Message((uint8_t*)data.c_str(), (uint16_t)data.length());
+//   unique_ptr<TransmitMsgData> md = make_unique<TransmitMsgData>();
+//   md->frm = move(icc);
+//   md->vl = vlink_;
+//   NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_SEND_ICC, md.release());
 
-}
+// }
 
 void SingleLinkTunnel::Shutdown()
 {
@@ -193,10 +193,10 @@ void SingleLinkTunnel::RemoveLink(
   vlink_.reset();
 }
 
-void
-SingleLinkTunnel::UpdateRouteTable(
-  const Json::Value & rt_descr)
-{}
+// void
+// SingleLinkTunnel::UpdateRouteTable(
+//   const Json::Value & rt_descr)
+// {}
 
 /*
 The only operations for single link tunnels are sending ICCs and normal IO
@@ -221,20 +221,20 @@ void SingleLinkTunnel::VlinkReadComplete(
       TapThread()->Post(RTC_FROM_HERE, this, MSGID_TAP_WRITE, tp_);
     }
   }
-  else if(fp.IsIccMsg())
-  { // this is an ICC message, deliver to the controller
-    unique_ptr<TincanControl> ctrl = make_unique<TincanControl>();
-    ctrl->SetControlType(TincanControl::CTTincanRequest);
-    Json::Value & req = ctrl->GetRequest();
-    req[TincanControl::Command] = TincanControl::ICC;
-    req[TincanControl::TunnelId] = descriptor_->uid;
-    req[TincanControl::LinkId] = vlink.Id();
-    req[TincanControl::Data] = string((char*)frame->Payload(),
-      frame->PayloadLength());
-    //RTC_LOG(LS_INFO) << " Delivering ICC to ctrl, data=\n"
-    //<< req[TincanControl::Data].asString();
-    ctrl_link_->Deliver(move(ctrl));
-  }
+//   else if(fp.IsIccMsg())
+//   { // this is an ICC message, deliver to the controller
+//     unique_ptr<TincanControl> ctrl = make_unique<TincanControl>();
+//     ctrl->SetControlType(TincanControl::CTTincanRequest);
+//     Json::Value & req = ctrl->GetRequest();
+//     req[TincanControl::Command] = TincanControl::ICC;
+//     req[TincanControl::TunnelId] = descriptor_->uid;
+//     req[TincanControl::LinkId] = vlink.Id();
+//     req[TincanControl::Data] = string((char*)frame->Payload(),
+//       frame->PayloadLength());
+//     //RTC_LOG(LS_INFO) << " Delivering ICC to ctrl, data=\n"
+//     //<< req[TincanControl::Data].asString();
+//     ctrl_link_->Deliver(move(ctrl));
+//   }
   else
   {
     RTC_LOG(LS_ERROR) << "Unknown frame type received!";

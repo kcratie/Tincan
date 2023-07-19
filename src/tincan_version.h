@@ -25,9 +25,9 @@
 namespace tincan
 {
     static const uint16_t kTincanVerMjr = 23;
-    static const uint16_t kTincanVerMnr = 3;
-    static const uint16_t kTincanVerRev = 3;
-    static const uint16_t kTincanVerBld = 781;
-    static const uint8_t kTincanControlVer = 6;
+    static const uint16_t kTincanVerMnr = 7;
+    static const uint16_t kTincanVerRev = 0;
+    static const uint16_t kTincanVerBld = 883;
+    static const uint8_t kTincanControlVer = 7;
 } // namespace tincan
 #endif // TINCAN_VERSION_H_
