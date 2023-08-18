@@ -20,7 +20,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 #ifndef TINCAN_TAPDEV_LNX_H_
 #define TINCAN_TAPDEV_LNX_H_
 
@@ -54,13 +53,13 @@ namespace tincan
         uint32_t mtu6;
     };
 
-    class TapDev : public EpollChannel
+    class TapDevLnx : public EpollChannel
     {
     public:
-        TapDev();
-        TapDev(TapDev &) = delete;
-        ~TapDev() override;
-        TapDev &operator=(TapDev &) = delete;
+        TapDevLnx();
+        TapDevLnx(TapDevLnx &&) = delete;
+        ~TapDevLnx() override;
+        TapDevLnx &operator=(TapDevLnx &&) = delete;
         sigslot::signal1<iob_t *> read_completion_;
         void Open(
             const TapDescriptor &tap_desc);
@@ -82,12 +81,10 @@ namespace tincan
         }
         virtual int FileDesc() override { return fd_; }
         virtual void Close() override;
-
     private:
         void SetFlags_(short a, short b);
         /////////////////////////////////////////////////////////////////////////////
         int fd_;
-        bool is_down_;
         unique_ptr<epoll_event> channel_ev;
         unique_ptr<iob_t> wbuf_;
         mutex sendq_mutex_;

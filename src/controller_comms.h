@@ -40,104 +40,51 @@
 #include <deque>
 #include <mutex>
 #include <unordered_map>
-#include <tincan_base.h>
+#include "tincan_base.h"
+#include "epoll_engine.h"
 #include "tincan_control.h"
 #include "rtc_base/logging.h"
-
 namespace tincan
 {
-    class CommsChannelMsgHandler
+    class ControllerCommsChannel : virtual public EpollChannel
     {
+
     public:
-        virtual ~CommsChannelMsgHandler() = default;
-        virtual void OnMsgReceived(
-            unique_ptr<vector<char>> msg) = 0;
-    };
-
-    class CommsChannel
-    {
-    public:
-        virtual ~CommsChannel() = default;
-        virtual void Send(unique_ptr<string> msg) = 0;
-        virtual void Deliver(
-            TincanControl &ctrl_resp) = 0;
-
-        virtual void Deliver(
-            unique_ptr<TincanControl> ctrl_resp) = 0;
-        virtual void Close() = 0;
-    };
-
-    class CommsServer
-    {
-    public:
-        virtual ~CommsServer() = default;
-        virtual void EnableEpollOut(epoll_event &channel_ev) = 0;
-        virtual void DisableEpollOut(epoll_event &channel_ev) = 0;
-        virtual void EnableEpollIn(epoll_event &channel_ev) = 0;
-        virtual void DisableEpollIn(epoll_event &channel_ev) = 0;
-    };
-
-    class ControllerCommsChannel : public CommsChannel
-    {
-    private:
-        CommsServer &comms_;
-    public:
-        const string &socket_name;
-        unique_ptr<epoll_event> channel_ev;
-        CommsChannelMsgHandler &msg_handler_;
-        deque<unique_ptr<string>> sendq_;
-        mutex sendq_mutex_;
-        unique_ptr<string> wbuf;
-        uint16_t rsz;
-        unique_ptr<vector<char>> rbuf;
-
         ControllerCommsChannel(
             const string &socket_name,
-            unique_ptr<epoll_event> channel_ev,
-            CommsServer &comms,
-            CommsChannelMsgHandler &msg_handler);
+            EpollChannelMsgHandler &msg_handler);
         ~ControllerCommsChannel();
-        void Send(unique_ptr<string> msg);
+        void QueueWrite(const string msg);
+        virtual void WriteNext() override;
+        virtual void ReadNext() override;
+        virtual bool CanWriteMore() override;
+        virtual epoll_event &ChannelEvent() override { return *channel_ev.get(); }
+        virtual void SetChannelEvent(unique_ptr<epoll_event> ev, int epoll_fd) override
+        {
+            channel_ev = std::move(ev);
+            epfd_ = epoll_fd;
+        }
+        virtual int FileDesc() override { return fd_; }
+        virtual void Close() override;
+
+        void ConnectToController();
         void Deliver(
             TincanControl &ctrl_resp);
-
         void Deliver(
             unique_ptr<TincanControl> ctrl_resp);
-        int QuerySocketFd();
-        void Close();
-    };
 
-    class ControllerComms : public CommsServer
-    {
     private:
-        int epoll_fd_;
-        int signal_fd_;
-        // int sigs[] = {SIGHUP, SIGTERM, SIGINT, SIGQUIT, SIGALRM};
-        unique_ptr<thread> thread_;
-        map<int, shared_ptr<ControllerCommsChannel>> comm_channels_;
-        unique_ptr<epoll_event> RegisterEpoll_(int events, int file_desc);
-        void RemoveEpoll_(int fd);
-        int HandleSignal_();
-        void HandleRead_(int fd);
-        void HandleWrite_(int fd);
-        void ServiceMain_();
-        void EnableEpollOut(epoll_event &channel_ev);
-        void DisableEpollOut(epoll_event &channel_ev);
-        void EnableEpollIn(epoll_event &channel_ev);
-        void DisableEpollIn(epoll_event &channel_ev);
-
-    public:
-        ControllerComms();
-        ~ControllerComms();
-        void Run();
-        void Shutdown();
-        // Client communications interface
-        shared_ptr<CommsChannel> ConnectToServer(
-            const string &socket_name,
-            CommsChannelMsgHandler &msg_handler);
-
-        void CloseChannel(
-            shared_ptr<CommsChannel> channel);
+        const string &socket_name;
+        unique_ptr<epoll_event> channel_ev;
+        EpollChannelMsgHandler &rcv_handler_;
+        mutex sendq_mutex_;
+        deque<string> sendq_;
+        unique_ptr<vector<char>> rbuf_;
+        uint16_t rsz_;
+        int fd_;
+        unique_ptr<string> wbuf_;
+        int epfd_;
     };
+
 } // namespace tincan
 #endif // TINCAN_CONTROL_LISTENER_H_
