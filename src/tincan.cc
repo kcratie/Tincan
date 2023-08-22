@@ -24,6 +24,9 @@
 #include "tincan.h"
 #include "tincan_exception.h"
 #include "turn_descriptor.h"
+#include <execinfo.h>
+#include <signal.h>
+
 namespace tincan
 {
     extern TincanParameters tp;
@@ -53,7 +56,26 @@ namespace tincan
         LogMessage::LogThreads();
         LogMessage::LogToDebug(LS_WARNING);
         LogMessage::SetLogToStderr(true);
+
+        // Register signal handlers
+        self_ = this;
+        struct sigaction shutdwm, gencore;
+        memset(&shutdwm, 0, sizeof(struct sigaction));
+        memset(&gencore, 0, sizeof(struct sigaction));
+        shutdwm.sa_handler = onStopHandler;
+        sigemptyset(&shutdwm.sa_mask);
+        shutdwm.sa_flags = 0;
+        sigaction(SIGQUIT, &shutdwm, NULL);
+        sigaction(SIGINT, &shutdwm, NULL);
+        sigaction(SIGTERM, &shutdwm, NULL);
+
+        // gencore.sa_handler = generate_core;
+        // sigemptyset(&gencore.sa_mask);
+        // gencore.sa_flags = 0;
+        // sigaction(SIGSEGV, &gencore, NULL);
+
         channel_->ConnectToController();
+
         // TD<decltype(tunnels_.at(""))> BasicTunnelType;
         // int x{0};
         // TD<decltype(x)> xType;
@@ -300,9 +322,25 @@ namespace tincan
     void
     Tincan::onStopHandler(int signum)
     {
-        RTC_LOG(LS_WARNING) << "SIGNUM recv:" << signum;
+        RTC_LOG(LS_WARNING) << "Received signal:" << signum;
         if (signum != SIGALRM)
             self_->Shutdown();
+    }
+
+    void
+    Tincan::generate_core(int signum)
+    {
+        RTC_LOG(LS_WARNING) << "Received signal: " << signum << " on PID: " << getpid();
+        void *array[10];
+        size_t size;
+
+        // get void*'s for all entries on the stack
+        size = backtrace(array, 10);
+
+        // print out all the frames to stderr
+        fprintf(stderr, "Error: signal %d:\n", signum);
+        backtrace_symbols_fd(array, size, STDERR_FILENO);
+        exit(1);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -310,17 +348,10 @@ namespace tincan
     void
     Tincan::Run()
     {
-
-        // Register signal with handler
-        self_ = this;
-        struct sigaction newact;
-        memset(&newact, 0, sizeof(struct sigaction));
-        newact.sa_handler = onStopHandler;
-        sigemptyset(&newact.sa_mask);
-        newact.sa_flags = 0;
-        sigaction(SIGQUIT, &newact, NULL);
-        sigaction(SIGINT, &newact, NULL);
-        sigaction(SIGTERM, &newact, NULL);
+        // RTC_LOG(LS_WARNING) << "Sending trap";
+        // int *foo = (int *)-1; // make a bad pointer
+        // printf("%d\n", *foo); // causes segfault
+        // __builtin_trap();
         epoll_eng_.Register(channel_, EPOLLIN);
         RegisterDataplane();
         do

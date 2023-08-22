@@ -83,6 +83,7 @@ namespace tincan
         void Shutdown();
         void RegisterDataplane();
         static void onStopHandler(int signum);
+        static void generate_core(int signum);
         // Dispatch Interface
         using TCDSIP = void (Tincan::*)(TincanControl &);
         void ConfigureLogging(TincanControl &control);
