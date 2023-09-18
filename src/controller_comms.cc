@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -109,8 +109,7 @@ namespace tincan
         }
         if (nw < 0)
         {
-            RTC_LOG(LS_WARNING) << "Ctrl channel data send failed. ERRNO: " << strerror(errno);
-            // Close(); todo: handle failure
+            throw TCEXCEPT("Failed to send data to controller");
         }
     }
 
@@ -123,6 +122,7 @@ namespace tincan
     void ControllerCommsChannel::Deliver(TincanControl &ctrl)
     {
         ctrl.SetRecipient("TincanTunnel");
+        ctrl.SetSessionId(getpid());
         QueueWrite(ctrl.StyledString());
 
     }
@@ -154,8 +154,7 @@ namespace tincan
         }
         if (nr < 0)
         {
-            RTC_LOG(LS_WARNING) << "Ctrl channel data recv failed. ERRNO: " << strerror(errno);
-            // Close(); todo: handle failure
+            throw TCEXCEPT("Failed to receive data from controller");
         }
     }
 

@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -171,8 +171,11 @@ namespace tincan
         cricket::IceGatheringState gather_state)
     {
         gather_state_ = gather_state;
-        if (gather_state == cricket::kIceGatheringComplete)
-            SignalLocalCasReady(vlink_desc_->uid, Candidates());
+        if (cas_ready_id_ && gather_state == cricket::kIceGatheringComplete)
+        {
+            SignalLocalCasReady(cas_ready_id_, Candidates());
+            cas_ready_id_ = 0;
+        }
         return;
     }
 
@@ -307,7 +310,7 @@ namespace tincan
 
         cricket::IceConfig ic;
         ic.continual_gathering_policy = cricket::GATHER_ONCE;
-        //ic.ice_check_interval_strong_connectivity = 1000;
+        // ic.ice_check_interval_strong_connectivity = 1000;
         transport_ctlr_->SetIceConfig(ic);
         cricket::ConnectionRole remote_conn_role = cricket::CONNECTIONROLE_ACTIVE;
         conn_role_ = cricket::CONNECTIONROLE_ACTPASS;
@@ -441,5 +444,10 @@ namespace tincan
         port_allocator_->Initialize();
         transport_ctlr_->MaybeStartGathering();
         return true;
+    }
+
+    void VirtualLink::SetCasReadyId(uint64_t id) noexcept
+    {
+        cas_ready_id_ = id;
     }
 } // end namespace tincan

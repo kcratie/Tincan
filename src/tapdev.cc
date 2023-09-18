@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -178,8 +178,7 @@ namespace tincan
             nw = write(fd_, wiob.data(), wiob.size());
             if (nw < 0)
             {
-                RTC_LOG(LS_WARNING) << "Tap Channel data send failed. ERRNO: " << strerror(errno);
-                // Close(); Todo: handle failure
+                throw TCEXCEPT("TAP write failed");
             }
         }
     }
@@ -202,8 +201,7 @@ namespace tincan
         }
         else if (nr < 0)
         {
-            RTC_LOG(LS_WARNING) << "TAP Channel data recv failed. ERRNO: " << strerror(errno);
-            // Close(); Todo: handle failure
+            throw TCEXCEPT("TAP read failed");
         }
     }
 

@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,6 +37,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <sstream>
 #include <stack>
 #include <string>
@@ -113,7 +114,7 @@ namespace tincan
     {
     public:
         TincanParameters()
-            : kVersionCheck(false), kNeedsHelp(false), kUdpPort(5800), kLinkConcurrentAIO(2)
+            : kVersionCheck(false), kNeedsHelp(false)
         {
         }
         void SetCliOpts(
@@ -136,28 +137,23 @@ namespace tincan
             {
                 kNeedsHelp = true;
             }
+
+            log_config = cli.getCmdOption("-l");
+            tunnel_id = cli.getCmdOption("-t");
         }
         static const uint16_t kMaxMtuSize = 1500;
         static const uint16_t kTapHeaderSize = 2;
         static const uint16_t kEthHeaderSize = 14;
         static const uint16_t kEthernetSize = kEthHeaderSize + kMaxMtuSize;
         static const uint16_t kTapBufferSize = kMaxMtuSize;
-        static const uint8_t kFT_DTF = 0x0A;
-        static const uint8_t kFT_FWD = 0x0B;
-        static const uint8_t kFT_ICC = 0x0C;
-        static const uint16_t kDtfMagic = 0x0A01;
-        static const uint16_t kFwdMagic = 0x0B01;
-        static const uint16_t kIccMagic = 0x0C01;
         static const char kCandidateDelim = ':';
         const char *const kIceUfrag = "+001EVIOICEUFRAG";
         const char *const kIcePwd = "+00000001EVIOICEPASSWORD";
-        const char *const kLocalHost = "127.0.0.1";
-        const char *const kLocalHost6 = "::1";
         bool kVersionCheck;
         bool kNeedsHelp;
-        uint16_t kUdpPort;
         string socket_name;
-        uint8_t kLinkConcurrentAIO;
+        string tunnel_id;
+        string log_config;
     };
     ///////////////////////////////////////////////////////////////////////////////
     template <typename InputIter>

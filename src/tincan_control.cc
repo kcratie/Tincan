@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -43,7 +43,8 @@ namespace tincan
     const Json::StaticString TincanControl::IP4PrefixLen("IP4PrefixLen");
     const Json::StaticString TincanControl::EVIO("EVIO");
     const Json::StaticString TincanControl::LinkId("LinkId");
-    const Json::StaticString TincanControl::LinkStateChange("LinkStateChange");
+    const Json::StaticString TincanControl::LinkConnected("LinkConnected");
+    const Json::StaticString TincanControl::LinkDisconnected("LinkDisconnected");
     const Json::StaticString TincanControl::Level("Level");
     const Json::StaticString TincanControl::MAC("MAC");
     const Json::StaticString TincanControl::Message("Message");
@@ -173,12 +174,15 @@ namespace tincan
     }
 
     TincanControl::TincanControl(
-        TincanControl &&ctrl_req) : proto_ver_(ctrl_req.proto_ver_),
-                                    tag_(ctrl_req.tag_),
-                                    type_(ctrl_req.type_),
-                                    dict_req_(ctrl_req.dict_req_),
-                                    dict_resp_(ctrl_req.dict_resp_)
+        TincanControl &&ctrl_req) noexcept : proto_ver_(ctrl_req.proto_ver_),
+                                             tag_(ctrl_req.tag_),
+                                             type_(ctrl_req.type_),
+                                             dict_req_(ctrl_req.dict_req_),
+                                             dict_resp_(ctrl_req.dict_resp_)
     {
+        ctrl_req.proto_ver_ = 0;
+        ctrl_req.tag_ = 0;
+        ctrl_req.type_ = CTInvalid;
         ctrl_req.dict_req_ = nullptr;
         ctrl_req.dict_resp_ = nullptr;
     }
@@ -191,7 +195,7 @@ namespace tincan
 
     TincanControl &
     TincanControl::operator=(
-        TincanControl &rhs)
+        const TincanControl &rhs)
     {
         if (this != &rhs)
         {
@@ -209,13 +213,16 @@ namespace tincan
 
     TincanControl &
     TincanControl::operator=(
-        TincanControl &&rhs)
+        TincanControl &&rhs) noexcept
     {
         if (this != &rhs)
         {
             proto_ver_ = rhs.proto_ver_;
             tag_ = rhs.tag_;
             type_ = rhs.type_;
+            rhs.proto_ver_ = 0;
+            rhs.tag_ = 0;
+            rhs.type_ = CTInvalid;
 
             delete dict_req_;
             dict_req_ = rhs.dict_req_;
@@ -301,6 +308,24 @@ namespace tincan
             (*dict_req_)[Command] = cmd;
         else if (type_ == CTTincanResponse)
             (*dict_resp_)[Command] = cmd;
+    }
+
+    int
+    TincanControl::GetSessionId() const
+    {
+        if (type_ == CTTincanRequest)
+            return (*dict_req_)["SessionId"].asInt();
+        if (type_ == CTTincanResponse)
+            return (*dict_resp_)["SessionId"].asInt();
+        return -1;
+    }
+
+    void TincanControl::SetSessionId(int sid)
+    {
+        if (type_ == CTTincanRequest)
+            (*dict_req_)["SessionId"] = sid;
+        else if (type_ == CTTincanResponse)
+            (*dict_resp_)["SessionId"] = sid;
     }
 
     void TincanControl::SetTransactionId(uint64_t tag)

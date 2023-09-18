@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -121,9 +121,11 @@ namespace tincan
             rtc::scoped_refptr<webrtc::DtlsTransport> dtls_transport,
             webrtc::DataChannelTransportInterface *data_channel_transport) override;
 
+        void SetCasReadyId(uint64_t id) noexcept;
+
         sigslot::signal1<string, single_threaded> SignalLinkUp;
         sigslot::signal1<string, single_threaded> SignalLinkDown;
-        sigslot::signal2<string, string> SignalLocalCasReady;
+        sigslot::signal2<uint64_t, string> SignalLocalCasReady;
         sigslot::signal3<uint8_t *, uint32_t, VirtualLink &> SignalMessageReceived;
 
     private:
@@ -183,6 +185,7 @@ namespace tincan
         cricket::IceGatheringState gather_state_;
         rtc::Thread *signaling_thread_;
         rtc::Thread *network_thread_;
+        uint64_t cas_ready_id_;
     };
 } // namespace tincan
 #endif // !TINCAN_VIRTUAL_LINK_H_

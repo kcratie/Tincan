@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,7 @@
 #include "tincan_exception.h"
 namespace tincan
 {
-    EpollEngine::EpollEngine() : epoll_fd_(1)
+    EpollEngine::EpollEngine() : epoll_fd_(1), exit_flag_(false)
     {
         epoll_fd_ = epoll_create(1);
         if (epoll_fd_ == -1)
@@ -81,7 +81,7 @@ namespace tincan
     {
         try
         {
-            shared_ptr<EpollChannel> ch = comm_channels_.at(fd);
+            auto ch = comm_channels_.at(fd);
             ch->WriteNext();
             if (!ch->CanWriteMore())
             {
@@ -91,7 +91,6 @@ namespace tincan
         catch (const std::exception &e)
         {
             RTC_LOG(LS_WARNING) << e.what();
-            Deregister(fd);
         }
     }
 
@@ -105,15 +104,15 @@ namespace tincan
         catch (const exception &e)
         {
             RTC_LOG(LS_WARNING) << e.what();
-            // Deregister(fd); Todo:
         }
     }
 
-    bool EpollEngine::Epoll()
+    void EpollEngine::Epoll()
     {
         struct epoll_event ev;
-        bool exit_flag = false;
         int num_fd = epoll_wait(epoll_fd_, &ev, 1, -1);
+        if (exit_flag_)
+            return;
         if (num_fd > 0)
         {
             if (ev.events & EPOLLIN)
@@ -140,11 +139,11 @@ namespace tincan
         {
             throw TCEXCEPT("Epoll wait error");
         }
-        return exit_flag;
     }
 
     void EpollEngine::Shutdown()
     {
+        exit_flag_ = true;
         for (const auto &i : comm_channels_)
             if (i.first != -1)
                 epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, i.first, nullptr);

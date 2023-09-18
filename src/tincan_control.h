@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -47,10 +47,10 @@ namespace tincan
         TincanControl(unique_ptr<Json::Value> req, unique_ptr<Json::Value> resp);
         TincanControl(const char *const req_data, const size_t len);
         TincanControl(const TincanControl &ctrl);
-        TincanControl(TincanControl &&ctrl);
+        TincanControl(TincanControl &&ctrl) noexcept;
         ~TincanControl();
-        TincanControl &operator=(TincanControl &rhs);
-        TincanControl &operator=(TincanControl &&rhs);
+        TincanControl &operator=(const TincanControl &rhs);
+        TincanControl &operator=(TincanControl &&rhs) noexcept;
 
         Json::Value &GetRequest();
         void SetRequest(unique_ptr<Json::Value> req);
@@ -62,6 +62,9 @@ namespace tincan
         string GetCommand() const;
         void SetCommand(string cmd);
 
+        int GetSessionId() const;
+        void SetSessionId(int sid);
+
         uint64_t GetTransactionId() const;
         void SetTransactionId(uint64_t tag);
 
@@ -71,9 +74,17 @@ namespace tincan
         void SetRecipient(const string &recipient);
         string StyledString();
 
+        static int InitialTagValue()
+        {
+            std::random_device rd;
+            std::mt19937 generator{rd()};
+            std::uniform_int_distribution<int> distribution(1, 99999999);
+            return distribution(generator);
+        }
+
         static uint64_t NextTagValue()
         {
-            static uint64_t tincan_control_tag_value__ = 0;
+            static uint64_t tincan_control_tag_value__ = InitialTagValue();
             return ++tincan_control_tag_value__;
         }
 
@@ -95,7 +106,8 @@ namespace tincan
         static const Json::StaticString IP4PrefixLen;
         static const Json::StaticString EVIO;
         static const Json::StaticString LinkId;
-        static const Json::StaticString LinkStateChange;
+        static const Json::StaticString LinkConnected;
+        static const Json::StaticString LinkDisconnected;
         static const Json::StaticString Level;
         static const Json::StaticString MAC;
         static const Json::StaticString Message;

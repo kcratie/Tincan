@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -36,9 +36,8 @@ namespace tincan
         std::pair<rtc::Thread *, rtc::Thread *> LinkThreads();
 
     private:
-        rtc::Thread signal_thread_;
+        // rtc::Thread signal_thread_;
         rtc::Thread network_thread_;
-        static unsigned int num_;
     };
 } // namespace tincan
 #endif // TINCAN_TUNNEL_THREADS_H_

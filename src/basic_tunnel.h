@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -87,7 +87,7 @@ namespace tincan
         {
         public:
             unique_ptr<iob_t> iob_;
-            TapMessageData(unique_ptr<iob_t> iob) : iob_(move(iob))
+            TapMessageData(unique_ptr<iob_t> iob) : iob_(std::move(iob))
             {
             }
             ~TapMessageData() = default;
@@ -98,73 +98,73 @@ namespace tincan
             shared_ptr<ControllerCommsChannel> ctrl_handle,
             TunnelThreads *thread_pool);
 
-        virtual ~BasicTunnel() = default;
+        ~BasicTunnel() = default;
 
-        virtual void Configure(
+        void Configure(
             unique_ptr<TapDescriptor> tap_desc,
             const vector<string> &ignored_list);
 
-        virtual shared_ptr<VirtualLink> CreateVlink(
-            unique_ptr<VlinkDescriptor> vlink_desc,
-            unique_ptr<PeerDescriptor> peer_desc) = 0;
+        shared_ptr<VirtualLink> CreateVlink(
+            unique_ptr<PeerDescriptor> peer_desc);
 
-        virtual TunnelDesc &Descriptor();
+        TunnelDesc &Descriptor();
 
-        virtual string Fingerprint();
+        string Fingerprint();
 
-        virtual string Name();
+        string Name();
 
-        virtual string MacAddress();
+        string MacAddress();
 
         shared_ptr<EpollChannel> TapChannel() { return tdev_; }
 
-        virtual void QueryInfo(
-            Json::Value &tnl_info) = 0;
+        void QueryInfo(
+            Json::Value &tnl_info);
 
-        virtual void QueryLinkId(
-            string &link_id) = 0;
+        void QueryLinkId(
+            string &link_id);
 
-        virtual void QueryLinkInfo(
+        void QueryLinkInfo(
+            Json::Value &vlink_info);
+
+        void QueryLinkCas(
             const string &vlink_id,
-            Json::Value &vlink_info) = 0;
+            Json::Value &cas_info);
 
-        virtual void QueryLinkCas(
-            const string &vlink_id,
-            Json::Value &cas_info) = 0;
+        void Shutdown();
 
-        virtual void Shutdown();
+        void Start();
 
-        virtual void Start();
-
-        virtual void RemoveLink(
-            const string &vlink_id) = 0;
+        void RemoveLink(
+            const string &vlink_id);
         //
-        virtual void VlinkReadComplete(
+        void VlinkReadComplete(
             uint8_t *data,
             uint32_t data_len,
-            VirtualLink &vlink) = 0;
+            VirtualLink &vlink);
         //
-        virtual void TapReadComplete(
-            iob_t *iob_rd) = 0;
+        void TapReadComplete(
+            iob_t *iob_rd);
         // MessageHandler overrides
         void OnMessage(
             Message *msg) override;
 
-    protected:
+    private:
         void SetIgnoredNetworkInterfaces(
             const vector<string> &ignored_list);
 
-        virtual unique_ptr<VirtualLink> CreateVlink(
-            unique_ptr<VlinkDescriptor> vlink_desc,
-            unique_ptr<PeerDescriptor>
-                peer_desc,
+        unique_ptr<VirtualLink> CreateVlink(
+            unique_ptr<PeerDescriptor> peer_desc,
             cricket::IceRole ice_role);
-        virtual void VLinkUp(
+
+        void VLinkUp(
             string vlink_id);
-        virtual void VLinkDown(
+
+        void VLinkDown(
             string vlink_id);
+
         rtc::Thread *SignalThread();
         rtc::Thread *NetworkThread();
+
         unique_ptr<TapDescriptor> tap_desc_;
         unique_ptr<TunnelDesc> descriptor_;
         shared_ptr<ControllerCommsChannel> ctrl_link_;
@@ -173,6 +173,7 @@ namespace tincan
         TunnelThreads *threads_;
         rtc::BasicNetworkManager net_manager_;
         shared_ptr<TapDev> tdev_;
+        shared_ptr<VirtualLink> vlink_;
     };
 } // namespace tincan
 #endif // BASIC_TUNNEL_H_

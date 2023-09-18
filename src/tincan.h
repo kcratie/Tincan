@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
 #define TINCAN_TINCAN_H_
 #include "tincan_base.h"
 #include "rtc_base/event.h"
-#include "single_link_tunnel.h"
+#include "basic_tunnel.h"
 #include "tunnel_threads.h"
 #include "controller_comms.h"
 #include "epoll_engine.h"
@@ -42,17 +42,14 @@ namespace tincan
         ~Tincan() = default;
         Tincan &operator=(Tincan &) = delete;
 
-        void CreateVlink(
-            const Json::Value &link_desc,
-            const TincanControl &control);
+        bool CreateVlink(TincanControl &control);
 
         void CreateTunnel(
             const Json::Value &tnl_desc,
             Json::Value &tnl_info);
 
         void QueryLinkStats(
-            const Json::Value &link_desc,
-            Json::Value &node_info);
+            Json::Value &stat_info);
 
         void QueryTunnelInfo(
             const Json::Value &tnl_desc,
@@ -69,7 +66,7 @@ namespace tincan
             Json::Value &cas_info);
 
         void OnLocalCasUpdated(
-            string link_id,
+            uint64_t control_id,
             string lcas);
 
         virtual void operator()(
@@ -77,8 +74,6 @@ namespace tincan
         void Run();
 
     private:
-        bool IsTunnelExisit(
-            const string &tnl_id);
         void OnStop();
         void Shutdown();
         void RegisterDataplane();
@@ -96,17 +91,16 @@ namespace tincan
         void RemoveLink(TincanControl &control);
         void RemoveTunnel(TincanControl &control);
         //
-        std::mutex tunnels_mutex_;
-        std::mutex inprogess_controls_mutex_;
         bool exit_flag_;
-        TunnelThreads threads_;
         EpollEngine epoll_eng_;
+        TunnelThreads threads_;
         unordered_map<string, TCDSIP> dispatch_map_;
         unordered_map<string, LoggingSeverity> log_levels_;
-        unordered_map<string, shared_ptr<BasicTunnel>> tunnels_;
+        shared_ptr<BasicTunnel> tunnel_;
         shared_ptr<ControllerCommsChannel> channel_;
         unique_ptr<FileRotatingLogSink> log_sink_;
-        unordered_map<string, unique_ptr<TincanControl>> inprogess_controls_;
+        std::mutex inprogess_controls_mutex_;
+        unordered_map<uint64_t, unique_ptr<TincanControl>> inprogess_controls_;
 
         static Tincan *self_;
     };

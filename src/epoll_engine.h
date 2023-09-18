@@ -1,6 +1,6 @@
 /*
  * EdgeVPNio
- * Copyright 2020, University of Florida
+ * Copyright 2023, University of Florida
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -79,6 +79,7 @@ namespace tincan
         static const std::array<int, 5> sig_codes;
         int epoll_fd_;
         int signal_fd_;
+        bool exit_flag_;
         unordered_map<int, shared_ptr<EpollChannel>> comm_channels_;
         bool HandleSignal_();
         void HandleRead_(int fd);
@@ -91,7 +92,7 @@ namespace tincan
         ~EpollEngine();
         void Register(shared_ptr<EpollChannel>, int events);
         void Deregister(int fd);
-        bool Epoll();
+        void Epoll();
         void Shutdown();
         void EnableEpollOut(epoll_event &channel_ev);
         void DisableEpollOut(epoll_event &channel_ev);
