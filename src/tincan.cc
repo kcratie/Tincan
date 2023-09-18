@@ -1,398 +1,549 @@
 /*
-* EdgeVPNio
-* Copyright 2020, University of Florida
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-* THE SOFTWARE.
-*/
+ * EdgeVPNio
+ * Copyright 2023, University of Florida
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 
 #include "tincan.h"
 #include "tincan_exception.h"
 #include "turn_descriptor.h"
+#include <execinfo.h>
+#include <signal.h>
+
 namespace tincan
 {
-Tincan::Tincan() :
-  exit_event_(false, false)
-{}
-
-Tincan::~Tincan()
-{}
-
-void
-Tincan::SetControllerLink(
-  ControllerLink * ctrl_handle)
-{
-  ctrl_link_ = ctrl_handle;
-}
-
-void Tincan::CreateTunnel(
-  const Json::Value & tnl_desc,
-  Json::Value & tnl_info)
-{
-  unique_ptr<TunnelDescriptor> td(new TunnelDescriptor);
-  td->uid = tnl_desc[TincanControl::TunnelId].asString();
-  td->node_id = tnl_desc[TincanControl::NodeId].asString();
-  if(IsTunnelExisit(td->uid))
-    throw TCEXCEPT("The specified Tunnel identifier already exists");
-
-  Json::Value stun_servers = tnl_desc["StunServers"];
-  for (Json::Value::ArrayIndex i = 0; i < stun_servers.size(); ++i)
-  {
-    td->stun_servers.push_back(stun_servers[i].asString());
-  }
-
-  Json::Value turn_servers = tnl_desc["TurnServers"];
-  for (Json::Value::ArrayIndex i = 0; i < turn_servers.size(); ++i)
-  {
-    TurnDescriptor turn_desc(
-      turn_servers[i]["Address"].asString(),
-      turn_servers[i]["User"].asString(),
-      turn_servers[i]["Password"].asString());
-    td->turn_descs.push_back(turn_desc);
-  }
-  td->enable_ip_mapping = false;
-  unique_ptr<BasicTunnel> tnl;
-  tnl = make_unique<SingleLinkTunnel>(move(td), ctrl_link_, &thread_pool_);
-  unique_ptr<TapDescriptor> tap_desc = make_unique<TapDescriptor>();
-  tap_desc->name = tnl_desc["TapName"].asString();
-  tap_desc->ip4 = tnl_desc["IP4"].asString();
-  tap_desc->prefix4 = tnl_desc["IP4PrefixLen"].asUInt();
-  tap_desc->mtu4 = tnl_desc[TincanControl::MTU4].asUInt();
-
-  Json::Value network_ignore_list =
-    tnl_desc[TincanControl::IgnoredNetInterfaces];
-  int count = network_ignore_list.size();
-  vector<string> if_list(count);
-  for (int i = 0; i < count; i++)
-  {
-    if_list[i] = network_ignore_list[i].asString();
-  }
-  tnl->Configure(move(tap_desc), if_list);
-  tnl->Start();
-  tnl->QueryInfo(tnl_info);
-  lock_guard<mutex> lg(tunnels_mutex_);
-  tunnels_.push_back(move(tnl));
-
-  return;
-}
-
-void
-Tincan::CreateVlink(
-  const Json::Value & link_desc,
-  const TincanControl & control)
-{
-  unique_ptr<VlinkDescriptor> vl_desc = make_unique<VlinkDescriptor>();
-  vl_desc->uid = link_desc[TincanControl::LinkId].asString();
-  unique_ptr<Json::Value> resp = make_unique<Json::Value>(Json::objectValue);
-  Json::Value & tnl_info = (*resp)[TincanControl::Message];
-  string tnl_id = link_desc[TincanControl::TunnelId].asString();
-  if(!IsTunnelExisit(tnl_id))
-  {
-    CreateTunnel(link_desc, tnl_info);
-  }
-  else
-  {
-    TunnelFromId(tnl_id).QueryInfo(tnl_info);
-  }
-  unique_ptr<PeerDescriptor> peer_desc = make_unique<PeerDescriptor>();
-  peer_desc->uid =
-    link_desc[TincanControl::PeerInfo][TincanControl::UID].asString();
-  peer_desc->vip4 =
-    link_desc[TincanControl::PeerInfo][TincanControl::VIP4].asString();
-  peer_desc->cas =
-    link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString();
-  peer_desc->fingerprint =
-    link_desc[TincanControl::PeerInfo][TincanControl::FPR].asString();
-  peer_desc->mac_address =
-    link_desc[TincanControl::PeerInfo][TincanControl::MAC].asString();
-
-  vl_desc->dtls_enabled = !link_desc[TincanControl::DisableDtls].asBool();
-
-
-  BasicTunnel & tnl = TunnelFromId(tnl_id);
-  shared_ptr<VirtualLink> vlink =
-    tnl.CreateVlink(move(vl_desc), move(peer_desc));
-  unique_ptr<TincanControl> ctrl = make_unique<TincanControl>(control);
-  if(!vlink->IsGatheringComplete())
-  {
-    ctrl->SetResponse(move(resp));
-    std::lock_guard<std::mutex> lg(inprogess_controls_mutex_);
-    inprogess_controls_[link_desc[TincanControl::LinkId].asString()]
-      = move(ctrl);
-
-    vlink->SignalLocalCasReady.connect(this, &Tincan::OnLocalCasUpdated);
-  }
-  else
-  {
-    (*resp)["Message"]["CAS"] = vlink->Candidates();
-    (*resp)["Success"] = true;
-    ctrl->SetResponse(move(resp));
-    ctrl_link_->Deliver(move(ctrl));
-  }
-}
-
-void
-Tincan::InjectFrame(
-  const Json::Value & frame_desc)
-{
-  const string & tnl_id = frame_desc[TincanControl::TunnelId].asString();
-  BasicTunnel & ol = TunnelFromId(tnl_id);
-  ol.InjectFame(frame_desc[TincanControl::Data].asString());
-}
-
-void
-Tincan::QueryLinkCas(
-  const Json::Value & link_desc,
-  Json::Value & cas_info)
-{
-  const string tnl_id = link_desc[TincanControl::TunnelId].asString();
-  const string vlid = link_desc[TincanControl::LinkId].asString();
-  BasicTunnel & ol = TunnelFromId(tnl_id);
-  ol.QueryLinkCas(vlid, cas_info);
-}
-
-void
-Tincan::QueryLinkStats(
-  const Json::Value & tunnel_ids,
-  Json::Value & stat_info)
-{
-  for(uint32_t i = 0; i < tunnel_ids["TunnelIds"].size(); i++)
-  {
-    vector<string>link_ids;
-    string tnl_id = tunnel_ids["TunnelIds"][i].asString();
-    BasicTunnel & ol = TunnelFromId(tnl_id);
-    ol.QueryLinkIds(link_ids);
-    for(auto vlid : link_ids)
+    extern TincanParameters tp;
+    Tincan::Tincan() : exit_flag_{false},
+                       dispatch_map_{
+                           {"ConfigureLogging", &Tincan::ConfigureLogging},
+                           {"CreateLink", &Tincan::CreateLink},
+                           {"CreateTunnel", &Tincan::CreateTunnel},
+                           {"Echo", &Tincan::Echo},
+                           {"QueryCandidateAddressSet", &Tincan::QueryCandidateAddressSet},
+                           {"QueryLinkStats", &Tincan::QueryLinkStats},
+                           {"QueryTunnelInfo", &Tincan::QueryTunnelInfo},
+                           {"RemoveTunnel", &Tincan::RemoveTunnel},
+                           {"RemoveLink", &Tincan::RemoveLink},
+                       },
+                       log_levels_{
+                           {"NONE", rtc::LS_NONE},
+                           {"ERROR", rtc::LS_ERROR},
+                           {"WARNING", rtc::LS_WARNING},
+                           {"INFO", rtc::LS_INFO},
+                           {"VERBOSE", rtc::LS_INFO},
+                           {"DEBUG", rtc::LS_INFO},
+                       },
+                       channel_{make_shared<ControllerCommsChannel>(tp.socket_name, *this)}
     {
-      ol.QueryLinkInfo(vlid, stat_info[tnl_id][vlid]);
+        LogMessage::LogTimestamps();
+        LogMessage::LogThreads();
+        LogMessage::LogToDebug(LS_WARNING);
+        LogMessage::SetLogToStderr(true);
+        if (!tp.log_config.empty())
+        {
+            // create Json from full request
+            Json::CharReaderBuilder b;
+            Json::CharReader *parser = b.newCharReader();
+            Json::String errs;
+            auto logcfg = make_unique<Json::Value>();
+            if (!parser->parse(tp.log_config.c_str(), tp.log_config.c_str() + tp.log_config.length(), logcfg.get(), &errs))
+            {
+                string errmsg = "Unable to parse json control object - ";
+                errmsg.append(tp.log_config);
+                throw TCEXCEPT(errmsg.c_str());
+            }
+            TincanControl ctrl(std::move(logcfg));
+            ConfigureLogging(ctrl);
+        }
+        else
+        {
+            auto logcfg = make_unique<Json::Value>();
+            (*logcfg)["Directory"] = "./";
+            (*logcfg)["Filename"] = "tincan";
+            (*logcfg)["MaxFileSize"] = 1048576;
+            (*logcfg)["MaxArchives"] = 1;
+            (*logcfg)["Device"] = "File";
+            (*logcfg)["Level"] = "WARNING";
+            TincanControl ctrl(std::move(logcfg));
+            ConfigureLogging(ctrl);
+        }
+        // Register signal handlers
+        self_ = this;
+        struct sigaction shutdwm;
+        memset(&shutdwm, 0, sizeof(struct sigaction));
+        shutdwm.sa_handler = onStopHandler;
+        sigemptyset(&shutdwm.sa_mask);
+        shutdwm.sa_flags = 0;
+        sigaction(SIGQUIT, &shutdwm, NULL);
+        sigaction(SIGINT, &shutdwm, NULL);
+        sigaction(SIGTERM, &shutdwm, NULL);
+
+        channel_->ConnectToController();
+
+        // TD<decltype(tunnel_.at(""))> BasicTunnelType;
+        // int x{0};
+        // TD<decltype(x)> xType;
     }
-  }
 
-}
-
-void
-Tincan::QueryTunnelInfo(
-  const Json::Value & tnl_desc,
-  Json::Value & tnl_info)
-{
-  BasicTunnel & ol = TunnelFromId(tnl_desc[TincanControl::TunnelId].asString());
-  ol.QueryInfo(tnl_info);
-}
-
-void 
-Tincan::RemoveTunnel(
-  const Json::Value & tnl_desc)
-{
-  const string tnl_id = tnl_desc[TincanControl::TunnelId].asString();
-  if(tnl_id.empty())
-    throw TCEXCEPT("No Tunnel ID was specified");
-  
-  lock_guard<mutex> lg(tunnels_mutex_);
-  for(auto tnl = tunnels_.begin(); tnl != tunnels_.end(); tnl++)
-  {
-    if((*tnl)->Descriptor().uid.compare(tnl_id) == 0)
+    void Tincan::CreateTunnel(
+        const Json::Value &tnl_desc,
+        Json::Value &tnl_info)
     {
-      (*tnl)->Shutdown();
-      tunnels_.erase(tnl);
-      RTC_LOG(LS_INFO) << "RemoveTunnel: Instance erased from collection " << tnl_id;
-      return;
+        tunnel_ = make_shared<BasicTunnel>(
+            make_unique<TunnelDesc>(tnl_desc),
+            channel_,
+            &threads_);
+        unique_ptr<TapDescriptor> tap_desc = make_unique<TapDescriptor>(
+            tnl_desc["TapName"].asString(),
+            tnl_desc["IP4"].asString(),
+            tnl_desc["IP4PrefixLen"].asUInt(),
+            tnl_desc[TincanControl::MTU4].asUInt());
+        Json::Value network_ignore_list =
+            tnl_desc[TincanControl::IgnoredNetInterfaces];
+        int count = network_ignore_list.size();
+        vector<string> if_list(count);
+        for (int i = 0; i < count; i++)
+        {
+            if_list[i] = network_ignore_list[i].asString();
+        }
+        tunnel_->Configure(std::move(tap_desc), if_list);
+        tunnel_->Start();
+        tunnel_->QueryInfo(tnl_info);
+        epoll_eng_.Register(tunnel_->TapChannel(), EPOLLIN);
+        return;
     }
-  }
-  RTC_LOG(LS_WARNING) << "RemoveTunnel: No such virtual network exists " << tnl_id;
-}
 
-void
-Tincan::RemoveVlink(
-  const Json::Value & link_desc)
-{
-  const string tnl_id = link_desc[TincanControl::TunnelId].asString();
-  const string vlid = link_desc[TincanControl::LinkId].asString();
-  if(tnl_id.empty() || vlid.empty())
-    throw TCEXCEPT("Required identifier not specified");
-
-  lock_guard<mutex> lg(tunnels_mutex_);
-  for(auto & tnl : tunnels_)
-  {
-    if(tnl->Descriptor().uid.compare(tnl_id) == 0)
+    bool
+    Tincan::CreateVlink(
+        TincanControl &control)
     {
-      tnl->RemoveLink(vlid);
+        auto resp = make_unique<Json::Value>(Json::objectValue);
+        Json::Value &tnl_info = (*resp)[TincanControl::Message];
+
+        Json::Value &link_desc = control.GetRequest();
+        if (!tunnel_)
+        {
+            CreateTunnel(link_desc, tnl_info);
+        }
+        else
+        {
+            tunnel_->QueryInfo(tnl_info);
+        }
+        unique_ptr<PeerDescriptor> peer_desc = make_unique<PeerDescriptor>();
+        peer_desc->uid =
+            link_desc[TincanControl::PeerInfo][TincanControl::UID].asString();
+        peer_desc->vip4 =
+            link_desc[TincanControl::PeerInfo][TincanControl::VIP4].asString();
+        peer_desc->cas =
+            link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString();
+        peer_desc->fingerprint =
+            link_desc[TincanControl::PeerInfo][TincanControl::FPR].asString();
+        peer_desc->mac_address =
+            link_desc[TincanControl::PeerInfo][TincanControl::MAC].asString();
+
+        shared_ptr<VirtualLink> vlink = tunnel_->CreateVlink(std::move(peer_desc));
+        if (vlink->IsGatheringComplete())
+        {
+            (*resp)[TincanControl::Message][TincanControl::CAS] = vlink->Candidates();
+            (*resp)[TincanControl::Success] = true;
+            control.SetResponse(std::move(resp));
+            return true;
+        }
+        unique_ptr<TincanControl> ctrl = make_unique<TincanControl>(control);
+        ctrl->SetResponse(std::move(resp));
+        std::lock_guard<std::mutex> lg(inprogess_controls_mutex_);
+        inprogess_controls_[control.GetTransactionId()] = std::move(ctrl);
+        vlink->SetCasReadyId(control.GetTransactionId());
+        vlink->SignalLocalCasReady.connect(this, &Tincan::OnLocalCasUpdated);
+        return false;
     }
-  }
-}
 
-void
-Tincan::SendIcc(
-  const Json::Value & icc_desc)
-{
-  const string tnl_id = icc_desc[TincanControl::TunnelId].asString();
-  const string & link_id = icc_desc[TincanControl::LinkId].asString();
-  if(icc_desc[TincanControl::Data].isString())
-  {
-    const string & data = icc_desc[TincanControl::Data].asString();
-    BasicTunnel & ol = TunnelFromId(tnl_id);
-    ol.SendIcc(link_id, data);
-  }
-  else
-    throw TCEXCEPT("Icc data is not represented as a string");
-}
-
-void
-Tincan::OnLocalCasUpdated(
-  string link_id,
-  string lcas)
-{
-  if(lcas.empty())
-  {
-    lcas = "No local candidates available on this vlink";
-    RTC_LOG(LS_WARNING) << lcas;
-  }
-  bool to_deliver = false;
-  unique_ptr<TincanControl> ctrl;
-  {
-    std::lock_guard<std::mutex> lg(inprogess_controls_mutex_);
-    auto itr = inprogess_controls_.begin();
-    for(; itr != inprogess_controls_.end(); itr++)
+    void
+    Tincan::QueryLinkCas(
+        const Json::Value &link_desc,
+        Json::Value &cas_info)
     {
-      if(itr->first == link_id)
-      {
-        to_deliver = true;
-        ctrl = move(itr->second);
-        Json::Value & resp = ctrl->GetResponse();
-        resp["Message"]["CAS"] = lcas;
-        resp["Success"] = true;
-        inprogess_controls_.erase(itr);
-        break;
-      }
+        const string tnl_id = link_desc[TincanControl::TunnelId].asString();
+        const string vlid = link_desc[TincanControl::LinkId].asString();
+        tunnel_->QueryLinkCas(vlid, cas_info);
     }
-  }
-  if(to_deliver)
-  {
-    ctrl_link_->Deliver(move(ctrl));
-  }
-}
 
-void Tincan::UpdateRouteTable(
-  const Json::Value & rts_desc)
-{
-  string tnl_id = rts_desc[TincanControl::TunnelId].asString();
-  BasicTunnel & ol = TunnelFromId(tnl_id);
-  ol.UpdateRouteTable(rts_desc["Table"]);
-}
+    void
+    Tincan::QueryLinkStats(
+        Json::Value &stat_info)
+    {
+        tunnel_->QueryLinkInfo(stat_info);
+    }
 
-void
-Tincan::Run()
-{
-  //TODO:Code cleanup
-#if defined(_TNC_WIN)
-  self_ = this;
-  SetConsoleCtrlHandler(ControlHandler, TRUE);
-#endif // _TNC_WIN
-#if defined(_TNC_LINUX)
-  //Registering signal with signal handler
-  self_ = this;
-  struct sigaction newact;
-  memset(&newact, 0, sizeof(struct sigaction));
-  newact.sa_handler = onStopHandler;
-  sigemptyset(&newact.sa_mask);
-  newact.sa_flags = 0;
-  sigaction(SIGINT, &newact, NULL);
-//   sigaction(SIGTERM, &newact, NULL);
-#endif
-  //Start tincan control to get config from Controller
-  unique_ptr<ControlDispatch> ctrl_dispatch(new ControlDispatch);
-  ctrl_dispatch->SetDispatchToTincanInf(this);
-  ctrl_listener_ = make_shared<ControlListener>(move(ctrl_dispatch));
-  ctrl_listener_->Run();
-  cout << "Control Listener now running\n";
-  exit_event_.Wait(Event::kForever);
-}
+    void
+    Tincan::QueryTunnelInfo(
+        const Json::Value &tnl_desc,
+        Json::Value &tnl_info)
+    {
+        auto tnl_id = tnl_desc[TincanControl::TunnelId].asString();
+        tunnel_->QueryInfo(tnl_info);
+    }
 
-bool
-Tincan::IsTunnelExisit(
-  const string & tnl_id)
-{
-  lock_guard<mutex> lg(tunnels_mutex_);
-  for(auto const & tnl : tunnels_) {
-    if(tnl->Descriptor().uid.compare(tnl_id) == 0)
-      return true;
-  }
-  return false;
-}
+    void
+    Tincan::RemoveTunnel(
+        const Json::Value &tnl_desc)
+    {
+        RTC_LOG(LS_INFO) << "Removing Tunnel " << tunnel_->Descriptor().uid;
+        tunnel_->Shutdown();
+        epoll_eng_.Deregister(tunnel_->TapChannel()->FileDesc());
+        tunnel_.reset();
+    }
 
-BasicTunnel &
-Tincan::TunnelFromId(
-  const string & tnl_id)
-{
-  lock_guard<mutex> lg(tunnels_mutex_);
-  for(auto const & tnl : tunnels_)
-  {
-    //list of tunnels will be small enough where a linear search is satifactory
-    if(tnl->Descriptor().uid.compare(tnl_id) == 0)
-      return *tnl.get();
-  }
-  string msg("No virtual network exists by this name: ");
-  msg.append(tnl_id);
-  throw TCEXCEPT(msg.c_str());
-}
-//-----------------------------------------------------------------------------
-void Tincan::OnStop() {
-  Shutdown(); //Todo: Do not use functions that aren't re-entrant inside a signal handler
-  exit_event_.Set();
-}
+    void
+    Tincan::RemoveVlink(
+        const Json::Value &link_desc)
+    {
+        const string tnl_id = link_desc[TincanControl::TunnelId].asString();
+        const string vlid = link_desc[TincanControl::LinkId].asString();
+        if (tnl_id.empty() || vlid.empty())
+            throw TCEXCEPT("Required identifier not specified");
+        tunnel_->RemoveLink(vlid);
+    }
 
-void
-Tincan::Shutdown()
-{
-  lock_guard<mutex> lg(tunnels_mutex_);
-  ctrl_listener_->Quit();
-  for(auto const & tnl : tunnels_) {
-    tnl->Shutdown();
-  }
-  tunnels_.clear();
-}
+    void
+    Tincan::OnLocalCasUpdated(
+        uint64_t control_id,
+        string lcas)
+    {
+        unique_ptr<TincanControl> ctrl;
+        try
+        {
+            std::lock_guard<std::mutex> lg(inprogess_controls_mutex_);
+            ctrl = std::move(inprogess_controls_.at(control_id));
+            inprogess_controls_.erase(control_id);
+        }
+        catch (exception &e)
+        {
+            RTC_LOG(LS_WARNING) << e.what();
+            return;
+        }
+        if (lcas.empty())
+        {
+            const string &link_id = ctrl->GetRequest()[TincanControl::TunnelId].asString();
+            lcas = "No local candidates available on vlink: ";
+            lcas.append(link_id);
+            RTC_LOG(LS_WARNING) << lcas;
+        }
+        Json::Value &resp = ctrl->GetResponse();
+        resp[TincanControl::Message][TincanControl::CAS] = lcas;
+        resp[TincanControl::Success] = true;
+        ctrl->SetControlType(TincanControl::CTTincanResponse);
+        channel_->Deliver(std::move(ctrl));
+    }
 
-/*
- * onStopHandler for handling SIGINT,SIGTERM in linux
- * Calls OnStop() for shutdown of tincan
- */
-#if defined(_TNC_LINUX)
-void
-Tincan::onStopHandler(int signum) {
-       self_->OnStop();
-}
-#endif
+    void
+    Tincan::operator()(
+        unique_ptr<vector<char>> msg)
+    {
+        try
+        {
+            TincanControl ctrl(msg->data(), msg->size());
+            RTC_LOG(LS_INFO) << "Received CONTROL: " << ctrl.StyledString();
+            (this->*dispatch_map_.at(ctrl.GetCommand()))(ctrl);
+        }
+        catch (exception &e)
+        {
+            RTC_LOG(LS_WARNING) << "A control failed to execute. "
+                                << string(msg->data(), msg->size()) << "\n"
+                                << e.what();
+        }
+    }
 
-/*
-FUNCTION:ControlHandler
-PURPOSE: Handles keyboard signals
-PARAMETERS: The signal code
-RETURN VALUE: Success/Failure
-++*/
-#if defined(_TNC_WIN)
-BOOL __stdcall Tincan::ControlHandler(DWORD CtrlType) {
-  switch(CtrlType) {
-  case CTRL_BREAK_EVENT:  // use Ctrl+C or Ctrl+Break to send
-  case CTRL_C_EVENT:      // termination signal
-    cout << "Stopping tincan... " << std::endl;
-    self_->OnStop();
-    return(TRUE);
-  }
-  return(FALSE);
+    void
+    Tincan::RegisterDataplane()
+    {
+        unique_ptr<TincanControl> ctrl = make_unique<TincanControl>();
+        ctrl->SetControlType(TincanControl::CTTincanRequest);
+        Json::Value &req = ctrl->GetRequest();
+        req[TincanControl::Command] = TincanControl::RegisterDataplane;
+        req[TincanControl::Data] = "Tincan Dataplane Ready";
+        req[TincanControl::TunnelId] = tp.tunnel_id;
+        channel_->Deliver(std::move(ctrl));
+    }
+
+    void
+    Tincan::Shutdown()
+    {
+        exit_flag_ = true;
+        RTC_LOG(LS_INFO) << "Tincan shutdown initiated";
+        epoll_eng_.Deregister(channel_->FileDesc());
+        channel_->Close();
+        tunnel_->Shutdown();
+        epoll_eng_.Deregister(tunnel_->TapChannel()->FileDesc());
+        tunnel_.reset();
+        epoll_eng_.Shutdown();
+    }
+
+    /*
+     * onStopHandler for handling SIGINT,SIGTERM in linux
+     * Calls OnStop() for shutdown of tincan
+     */
+    void
+    Tincan::onStopHandler(int signum)
+    {
+        RTC_LOG(LS_INFO) << "Received signal:" << signum;
+        if (signum != SIGALRM)
+            self_->Shutdown();
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+
+    void
+    Tincan::Run()
+    {
+        epoll_eng_.Register(channel_, EPOLLIN);
+        RegisterDataplane();
+        do
+        {
+            try
+            {
+                while (!exit_flag_)
+                {
+                    epoll_eng_.Epoll();
+                }
+            }
+            catch (const std::exception &e)
+            {
+                RTC_LOG(LS_INFO) << e.what();
+            }
+        } while (!exit_flag_);
+        RTC_LOG(LS_INFO) << "Tincan shutdown completed";
+    }
+
+    void
+    Tincan::ConfigureLogging(
+        TincanControl &control)
+    {
+
+        Json::Value &req = control.GetRequest();
+        string log_lvl = req[TincanControl::Level].asString();
+        string msg("Tincan logging successfully configured.");
+        bool status = true;
+        try
+        {
+            if (req["Device"].asString() == "All" || req["Device"].asString() == "File")
+            {
+                string dir = req["Directory"].asString();
+                ostringstream fn;
+                fn << req["Filename"].asString() << "-" << getpid() << ".log";
+                size_t max_sz = req["MaxFileSize"].asUInt64();
+                size_t num_fls = req["MaxArchives"].asUInt64();
+                log_sink_ = make_unique<FileRotatingLogSink>(dir, fn.str(), max_sz, num_fls);
+                log_sink_->Init();
+                LogMessage::AddLogToStream(log_sink_.get(), log_levels_.at(log_lvl));
+            }
+            if (req["Device"].asString() == "All" ||
+                req["Device"].asString() == "Console")
+            {
+                if (req["ConsoleLevel"].asString().length() > 0)
+                    log_lvl = req["ConsoleLevel"].asString();
+                LogMessage::LogToDebug(log_levels_.at(log_lvl));
+            }
+        }
+        catch (exception &)
+        {
+            LogMessage::LogToDebug(LS_INFO);
+            LogMessage::SetLogToStderr(true);
+            msg = "The configure logging operation failed. Using Console/WARNING";
+            RTC_LOG(LS_WARNING) << msg;
+            status = false;
+        }
+    }
+
+    void
+    Tincan::CreateLink(
+        TincanControl &control)
+    {
+        bool is_resp_ready = false;
+        try
+        {
+            is_resp_ready = CreateVlink(control);
+        }
+        catch (exception &e)
+        {
+            string er_msg = "CreateLink failed.";
+            RTC_LOG(LS_ERROR) << e.what() << ". Control Data=\n"
+                              << control.StyledString();
+            is_resp_ready = true;
+            unique_ptr<Json::Value> resp = make_unique<Json::Value>(Json::objectValue);
+            (*resp)[TincanControl::Message] = er_msg;
+            (*resp)[TincanControl::Success] = false;
+            control.SetResponse(std::move(resp));
+        }
+        if (is_resp_ready)
+        {
+            channel_->Deliver(control);
+        } // else respond when CAS is available
+    }
+    void
+    Tincan::CreateTunnel(
+        TincanControl &control)
+    {
+        Json::Value &req = control.GetRequest();
+        unique_ptr<Json::Value> resp = make_unique<Json::Value>(Json::objectValue);
+        try
+        {
+            CreateTunnel(req, (*resp)[TincanControl::Message]);
+            (*resp)[TincanControl::Success] = true;
+        }
+        catch (exception &e)
+        {
+            string er_msg = "The CreateTunnel operation failed.";
+            RTC_LOG(LS_ERROR) << er_msg << e.what() << ". Control Data=\n"
+                              << control.StyledString();
+            (*resp)[TincanControl::Message] = er_msg;
+            (*resp)[TincanControl::Success] = false;
+        }
+        control.SetResponse(std::move(resp));
+        channel_->Deliver(control);
+    }
+
+    void
+    Tincan::Echo(TincanControl &control)
+    {
+        Json::Value &req = control.GetRequest();
+        string msg = req[TincanControl::Message].asString();
+        control.SetResponse(msg, true);
+        control.SetControlType(TincanControl::CTTincanResponse);
+        channel_->Deliver(control);
+    }
+
+    void
+    Tincan::QueryCandidateAddressSet(
+        TincanControl &control)
+    {
+        Json::Value &req = control.GetRequest(), cas_info;
+        string resp;
+        bool status = false;
+        try
+        {
+            QueryLinkCas(req, cas_info);
+            resp = cas_info.toStyledString();
+            status = true;
+        }
+        catch (exception &e)
+        {
+            resp = "The QueryCandidateAddressSet operation failed. ";
+            RTC_LOG(LS_WARNING) << resp << e.what() << ". Control Data=\n"
+                                << control.StyledString();
+        }
+        control.SetResponse(resp, status);
+        channel_->Deliver(control);
+    }
+
+    void
+    Tincan::QueryLinkStats(
+        TincanControl &control)
+    {
+        Json::Value &req = control.GetRequest();
+        unique_ptr<Json::Value> resp = make_unique<Json::Value>(Json::objectValue);
+        (*resp)[TincanControl::Success] = false;
+        try
+        {
+            QueryLinkStats((*resp)[TincanControl::Message]);
+            (*resp)[TincanControl::Message][TincanControl::TunnelId] = req[TincanControl::TunnelId];
+            (*resp)[TincanControl::Success] = true;
+        }
+        catch (exception &e)
+        {
+            string er_msg = "The QueryLinkStats operation failed. ";
+            RTC_LOG(LS_WARNING) << er_msg << e.what() << ". Control Data=\n"
+                                << control.StyledString();
+            (*resp)[TincanControl::Message] = er_msg;
+            (*resp)[TincanControl::Success] = false;
+        }
+        control.SetResponse(std::move(resp));
+        channel_->Deliver(control);
+    }
+
+    void
+    Tincan::QueryTunnelInfo(
+        TincanControl &control)
+    {
+        Json::Value &req = control.GetRequest(), node_info;
+        string resp("The QueryTunnelInfo operation succeeded");
+        bool status = false;
+        try
+        {
+            QueryTunnelInfo(req, node_info);
+            resp = node_info.toStyledString();
+            status = true;
+        }
+        catch (exception &e)
+        {
+            resp = "The QueryTunnelInfo operation failed. ";
+            resp.append(e.what());
+            RTC_LOG(LS_WARNING) << resp << e.what() << ". Control Data=\n"
+                                << control.StyledString();
+        }
+        control.SetResponse(resp, status);
+        channel_->Deliver(control);
+    }
+
+    void
+    Tincan::RemoveLink(
+        TincanControl &control)
+    {
+        bool status = false;
+        Json::Value &req = control.GetRequest();
+        string msg("The RemoveLink operation succeeded");
+        try
+        {
+            RemoveVlink(req);
+            status = true;
+        }
+        catch (exception &e)
+        {
+            msg = "The RemoveLink operation failed.";
+            RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n"
+                                << control.StyledString();
+        }
+        control.SetResponse(msg, status);
+        channel_->Deliver(control);
+    }
+
+    void
+    Tincan::RemoveTunnel(
+        TincanControl &control)
+    {
+        bool status = false;
+        Json::Value &req = control.GetRequest();
+        string msg("The RemoveTunnel operation ");
+        try
+        {
+            RemoveTunnel(req);
+            status = true;
+            msg.append("succeeded.");
+        }
+        catch (exception &e)
+        {
+            msg = "failed.";
+            RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n"
+                                << control.StyledString();
+        }
+        control.SetResponse(msg, status);
+        channel_->Deliver(control);
+    }
 }
-#endif // _TNC_WIN
-} // namespace tincan

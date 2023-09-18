@@ -20,38 +20,31 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef TINCAN_TUNNEL_DESCRIPTOR_H_
-#define TINCAN_TUNNEL_DESCRIPTOR_H_
 #include "tincan_base.h"
-#include "turn_descriptor.h"
+#include <errno.h>
+#include "tincan_exception.h"
+
 namespace tincan
 {
-    struct TunnelDesc
+    TincanException::TincanException(const string &arg, const char *file, int line)
     {
-        TunnelDesc(const Json::Value &desc) : uid{desc[TincanControl::TunnelId].asString()},
-                                              node_id{desc[TincanControl::NodeId].asString()}
-        {
+        ostringstream ostr;
+        ostr << file << ":" << line << ": " << arg << " - " << strerror(errno);
+        emsg = ostr.str();
+    }
 
-            Json::Value stuns = desc["StunServers"];
-            for (Json::Value::ArrayIndex i = 0; i < stun_servers.size(); ++i)
-            {
-                stun_servers.push_back(stuns[i].asString());
-            }
+    TincanException::TincanException()
+    {
+    }
 
-            Json::Value turns = desc["TurnServers"];
-            for (Json::Value::ArrayIndex i = 0; i < turns.size(); ++i)
-            {
-                TurnDescriptor turn_desc(
-                    turns[i]["Address"].asString(),
-                    turns[i]["User"].asString(),
-                    turns[i]["Password"].asString());
-                turn_descs.push_back(turn_desc);
-            }
-        }
-        const string uid;
-        const string node_id;
-        vector<string> stun_servers;
-        vector<TurnDescriptor> turn_descs;
-    };
-} // namespace tincan
-#endif // TINCAN_TUNNEL_DESCRIPTOR_H_
+    TincanException::~TincanException()
+    {
+    }
+
+    const char *
+    TincanException::what() const _NOEXCEPT
+    {
+        return emsg.c_str();
+    }
+
+} // tincan

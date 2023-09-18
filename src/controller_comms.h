@@ -20,57 +20,41 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifndef TINCAN_CONTROLLER_COMMS_H_
+#define TINCAN_CONTROLLER_COMMS_H_
+#include <sys/signalfd.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
+#include <sys/un.h>
+#include <signal.h>
+#include <assert.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
+#include <fcntl.h>
 
-#ifndef TINCAN_TAPDEV_LNX_H_
-#define TINCAN_TAPDEV_LNX_H_
-
+#include <queue>
+#include <thread>
+#include <deque>
+#include <mutex>
+#include <unordered_map>
 #include "tincan_base.h"
 #include "epoll_engine.h"
-
+#include "tincan_control.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/third_party/sigslot/sigslot.h"
-
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <net/if.h>
-#include <linux/if_tun.h>
-
 namespace tincan
 {
-    struct TapDescriptor
+    class ControllerCommsChannel : virtual public EpollChannel
     {
-        TapDescriptor(
-            string name,
-            string ip4,
-            uint32_t prefix4,
-            uint32_t mtu4)
-            : name{name}, ip4{ip4}, prefix4{prefix4}, mtu4{mtu4}, prefix6{0}, mtu6{0} {}
-        const string name;
-        string ip4;
-        uint32_t prefix4;
-        uint32_t mtu4;
-        string ip6;
-        uint32_t prefix6;
-        uint32_t mtu6;
-    };
 
-    class TapDev : public EpollChannel
-    {
     public:
-        TapDev();
-        TapDev(TapDev &) = delete;
-        ~TapDev() override;
-        TapDev &operator=(TapDev &) = delete;
-        sigslot::signal1<iob_t *> read_completion_;
-        void Open(
-            const TapDescriptor &tap_desc);
-        uint16_t Mtu();
-        void Up();
-        void Down();
-        MacAddressType MacAddress();
-
-        //////////////////////////////////////////////////
-        void QueueWrite(unique_ptr<iob_t> msg);
+        ControllerCommsChannel(
+            const string &socket_name,
+            EpollChannelMsgHandler &msg_handler);
+        ~ControllerCommsChannel();
+        void QueueWrite(const string msg);
         virtual void WriteNext() override;
         virtual void ReadNext() override;
         virtual bool CanWriteMore() override;
@@ -83,18 +67,24 @@ namespace tincan
         virtual int FileDesc() override { return fd_; }
         virtual void Close() override;
 
+        void ConnectToController();
+        void Deliver(
+            TincanControl &ctrl_resp);
+        void Deliver(
+            unique_ptr<TincanControl> ctrl_resp);
+
     private:
-        void SetFlags_(short a, short b);
-        /////////////////////////////////////////////////////////////////////////////
-        int fd_;
-        bool is_down_;
+        const string &socket_name;
         unique_ptr<epoll_event> channel_ev;
-        unique_ptr<iob_t> wbuf_;
+        EpollChannelMsgHandler &rcv_handler_;
         mutex sendq_mutex_;
-        deque<iob_t> sendq_;
+        deque<string> sendq_;
+        unique_ptr<vector<char>> rbuf_;
+        uint16_t rsz_;
+        int fd_;
+        unique_ptr<string> wbuf_;
         int epfd_;
-        struct ifreq ifr_;
-        MacAddressType mac_;
     };
-}
-#endif
+
+} // namespace tincan
+#endif // TINCAN_CONTROL_LISTENER_H_
