@@ -62,7 +62,7 @@ namespace tincan
         int rc = epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr);
         if (rc == -1)
         {
-            RTC_LOG(LS_WARNING) << "Error: epoll_ctl_del failed";
+            RTC_LOG(LS_WARNING) << "Error: epoll_ctl_del failed. epoll_fd:" << epoll_fd_ << " fd:" << fd;
         }
         comm_channels_.erase(fd);
     }

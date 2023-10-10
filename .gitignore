@@ -4,7 +4,6 @@ out/
 *.so
 *.o
 *.log
-
+src/tincan_version.h
 build/
 BUILD.gn
-src/windows/

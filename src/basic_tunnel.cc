@@ -67,7 +67,6 @@ namespace tincan
         if (vlink_ && vlink_->IsReady())
         {
             LinkInfoMsgData md;
-            md.vl = vlink_;
             NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_DISC_LINK, &md);
             md.msg_event.Wait(Event::kForever);
         }
@@ -185,7 +184,6 @@ namespace tincan
             if (vlink_->IsReady())
             {
                 LinkInfoMsgData md;
-                md.vl = vlink_;
                 NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_QUERY_NODE_INFO, &md);
                 md.msg_event.Wait(Event::kForever);
                 vlink_info[TincanControl::Stats].swap(md.info);
@@ -214,7 +212,6 @@ namespace tincan
         if (vlink_->IsReady())
         {
             LinkInfoMsgData md;
-            md.vl = vlink_;
             NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_DISC_LINK, &md);
             md.msg_event.Wait(Event::kForever);
         }
@@ -240,7 +237,6 @@ namespace tincan
         {
             TransmitMsgData *md = new TransmitMsgData;
             md->frm = std::move(iob);
-            md->vl = vlink_;
             NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_TRANSMIT, md);
         }
     }
@@ -310,22 +306,18 @@ namespace tincan
         {
         case MSGID_TRANSMIT:
         {
-            unique_ptr<iob_t> frame = std::move(((TransmitMsgData *)msg->pdata)->frm);
-            shared_ptr<VirtualLink> vl = ((TransmitMsgData *)msg->pdata)->vl;
-            vl->Transmit(std::move(frame));
+            vlink_->Transmit(std::move(((TransmitMsgData *)msg->pdata)->frm));
         }
         break;
         case MSGID_QUERY_NODE_INFO:
         {
-            shared_ptr<VirtualLink> vl = ((LinkInfoMsgData *)msg->pdata)->vl;
-            vl->GetStats(((LinkInfoMsgData *)msg->pdata)->info);
+            vlink_->GetStats(((LinkInfoMsgData *)msg->pdata)->info);
             ((LinkInfoMsgData *)msg->pdata)->msg_event.Set();
         }
         break;
         case MSGID_DISC_LINK:
         {
-            shared_ptr<VirtualLink> vl = ((LinkMsgData *)msg->pdata)->vl;
-            vl->Disconnect();
+            vlink_->Disconnect();
             ((LinkInfoMsgData *)msg->pdata)->msg_event.Set();
         }
         break;

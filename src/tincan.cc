@@ -85,6 +85,7 @@ namespace tincan
             ConfigureLogging(ctrl);
         }
         // Register signal handlers
+        //todo: handle signal in epoll engine
         self_ = this;
         struct sigaction shutdwm;
         memset(&shutdwm, 0, sizeof(struct sigaction));
@@ -290,8 +291,8 @@ namespace tincan
         RTC_LOG(LS_INFO) << "Tincan shutdown initiated";
         epoll_eng_.Deregister(channel_->FileDesc());
         channel_->Close();
-        tunnel_->Shutdown();
         epoll_eng_.Deregister(tunnel_->TapChannel()->FileDesc());
+        tunnel_->Shutdown();
         tunnel_.reset();
         epoll_eng_.Shutdown();
     }
@@ -383,8 +384,9 @@ namespace tincan
         }
         catch (exception &e)
         {
-            string er_msg = "CreateLink failed.";
-            RTC_LOG(LS_ERROR) << e.what() << ". Control Data=\n"
+            string er_msg = "CreateLink failed. Error=";
+            er_msg.append(e.what());
+            RTC_LOG(LS_ERROR) << er_msg << ". Control Data=\n"
                               << control.StyledString();
             is_resp_ready = true;
             unique_ptr<Json::Value> resp = make_unique<Json::Value>(Json::objectValue);

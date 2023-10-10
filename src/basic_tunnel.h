@@ -60,7 +60,6 @@ namespace tincan
         class TransmitMsgData : public MessageData
         {
         public:
-            shared_ptr<VirtualLink> vl;
             unique_ptr<iob_t> frm;
         };
         class LinkInfoMsgData : public MessageData
