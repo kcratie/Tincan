@@ -29,7 +29,6 @@ namespace tincan
 struct PeerDescriptor
 {
   string uid;
-  string vip4;
   string fingerprint;
   string mac_address;
   string cas;

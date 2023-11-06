@@ -42,7 +42,7 @@ namespace tincan
     }
 
     const char *
-    TincanException::what() const _NOEXCEPT
+    TincanException::what() const noexcept
     {
         return emsg.c_str();
     }

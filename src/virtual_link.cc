@@ -36,13 +36,14 @@ namespace tincan
         rtc::Thread *signaling_thread,
         rtc::Thread *network_thread) : vlink_desc_(move(vlink_desc)),
                                        peer_desc_(move(peer_desc)),
-                                       conn_role_(cricket::CONNECTIONROLE_ACTPASS),
+                                       local_conn_role_(cricket::CONNECTIONROLE_ACTPASS),
                                        dtls_transport_(nullptr),
                                        packet_options_(DSCP_DEFAULT),
                                        packet_factory_(network_thread),
                                        gather_state_(cricket::kIceGatheringNew),
                                        signaling_thread_(signaling_thread),
-                                       network_thread_(network_thread)
+                                       network_thread_(network_thread),
+                                       pa_init_(false)
     {
         content_name_.append(vlink_desc_->uid.substr(0, 7));
         local_description_ = make_unique<cricket::SessionDescription>();
@@ -53,6 +54,7 @@ namespace tincan
                                   int64_t packet_time_us)
         { RTC_NOTREACHED(); };
         config_.ice_transport_factory = ice_transport_factory_.get();
+        // config_.disable_encryption = true; //! todo: test
     }
 
     VirtualLink::~VirtualLink()
@@ -91,13 +93,9 @@ namespace tincan
             port_allocator_.get(),
             /*async_resolver_factory*/ nullptr,
             config_);
-        SetupICE(move(sslid), move(local_fingerprint));
+        SetupICE(move(sslid), move(local_fingerprint), ice_role);
         dtls_transport_ = transport_ctlr_->GetDtlsTransport(content_name_);
         RegisterLinkEventHandlers();
-
-        // The port allocator lives on the network thread and should be initialized there.
-        network_thread_->Invoke<bool>(
-            RTC_FROM_HERE, rtc::Bind(&VirtualLink::InitializePortAllocator, this));
         return;
     }
 
@@ -133,8 +131,9 @@ namespace tincan
                 cas_vec.push_back(candidate);
             }
         } while (iss);
-        if (!(transport_ctlr_->AddRemoteCandidates(content_name_, cas_vec).ok()))
-            throw TCEXCEPT(string("Failed to add remote candidates - "));
+        webrtc::RTCError err = transport_ctlr_->AddRemoteCandidates(content_name_, cas_vec);
+        if (!err.ok())
+            throw TCEXCEPT(string("Failed to add remote candidates - ") + err.message());
         return;
     }
 
@@ -146,13 +145,13 @@ namespace tincan
         const int64_t &,
         int)
     {
-        SignalMessageReceived((uint8_t *)data, *(uint32_t *)&len, *this);
+        SignalMessageReceived(data, len);
     }
 
     void
     VirtualLink::OnSentPacket(
         PacketTransportInternal *,
-        const rtc::SentPacket &)
+        const rtc::SentPacket &sp)
     {
         // nothing to do atm ...
     }
@@ -200,7 +199,6 @@ namespace tincan
         dtls_transport_->SignalReadPacket.connect(this, &VirtualLink::OnReadPacket);
         dtls_transport_->SignalSentPacket.connect(this, &VirtualLink::OnSentPacket);
         dtls_transport_->SignalWritableState.connect(this, &VirtualLink::OnWriteableState);
-        // channel_->SignalReadyToSend.connect(this, &VirtualLink::OnWriteableState);
 
         transport_ctlr_->SignalIceCandidatesGathered.connect(
             this, &VirtualLink::OnCandidatesGathered);
@@ -208,11 +206,11 @@ namespace tincan
             this, &VirtualLink::OnGatheringState);
     }
 
-    void VirtualLink::Transmit(unique_ptr<iob_t> frame)
+    void VirtualLink::Transmit(unique_ptr<Iob> frame)
     {
         int status = dtls_transport_->SendPacket(frame->data(), frame->size(), packet_options_, 0);
         if (status < 0)
-            RTC_LOG(LS_INFO) << "Vlink send failed. ERRNO: " << errno;
+            RTC_LOG(LS_INFO) << "Vlink send failed. ERRNO: " << dtls_transport_->GetError();
     }
 
     string VirtualLink::Candidates()
@@ -244,6 +242,8 @@ namespace tincan
         const string &peer_cas)
     {
         peer_desc_->cas = peer_cas;
+        if (peer_desc_->cas.length() != 0)
+            AddRemoteCandidates(peer_desc_->cas);
     }
 
     void
@@ -286,7 +286,8 @@ namespace tincan
     void
     VirtualLink::SetupICE(
         unique_ptr<SSLIdentity> sslid,
-        unique_ptr<SSLFingerprint> local_fingerprint)
+        unique_ptr<SSLFingerprint> local_fingerprint,
+        cricket::IceRole ice_role)
     {
         if (vlink_desc_->dtls_enabled)
         {
@@ -307,22 +308,20 @@ namespace tincan
             local_fingerprint.release();
             RTC_LOG(LS_INFO) << "Not using DTLS on vlink " << content_name_ << "\n";
         }
-
         cricket::IceConfig ic;
         ic.continual_gathering_policy = cricket::GATHER_ONCE;
-        // ic.ice_check_interval_strong_connectivity = 1000;
         transport_ctlr_->SetIceConfig(ic);
         cricket::ConnectionRole remote_conn_role = cricket::CONNECTIONROLE_ACTIVE;
-        conn_role_ = cricket::CONNECTIONROLE_ACTPASS;
-        if (cricket::ICEROLE_CONTROLLING == ice_role_)
+        local_conn_role_ = cricket::CONNECTIONROLE_ACTPASS;
+        if (cricket::ICEROLE_CONTROLLED == ice_role)
         {
-            conn_role_ = cricket::CONNECTIONROLE_ACTIVE;
+            local_conn_role_ = cricket::CONNECTIONROLE_ACTIVE;
             remote_conn_role = cricket::CONNECTIONROLE_ACTPASS;
         }
 
         cricket::TransportDescription local_transport_desc(
             vector<string>(), tp.kIceUfrag, tp.kIcePwd,
-            cricket::ICEMODE_FULL, conn_role_, local_fingerprint.get());
+            cricket::ICEMODE_FULL, local_conn_role_, local_fingerprint.get());
 
         cricket::TransportDescription remote_transport_desc(
             vector<string>(), tp.kIceUfrag, tp.kIcePwd,
@@ -343,21 +342,22 @@ namespace tincan
         remote_description_->AddGroup(bundle_group);
         remote_description_->AddTransportInfo(cricket::TransportInfo(content_name_, remote_transport_desc));
 
-        if (cricket::ICEROLE_CONTROLLING == ice_role_)
+        if (ice_role == cricket::ICEROLE_CONTROLLING)
         {
-            // when controlling the remote description must be set first.
-            transport_ctlr_->SetRemoteDescription(SdpType::kOffer, remote_description_.get());
-            transport_ctlr_->SetLocalDescription(SdpType::kAnswer, local_description_.get());
-        }
-        else if (cricket::ICEROLE_CONTROLLED == ice_role_)
-        {
+            RTC_LOG(LS_INFO) << "Creating CONTROLLING vlink to peer " << peer_desc_->uid;
             transport_ctlr_->SetLocalDescription(SdpType::kOffer, local_description_.get());
             transport_ctlr_->SetRemoteDescription(SdpType::kAnswer, remote_description_.get());
         }
+        else if (ice_role == cricket::ICEROLE_CONTROLLED)
+        {
+            // when receiving an offer the remote description with the offer must be set first.
+            RTC_LOG(LS_INFO) << "Creating CONTROLLED vlink to peer " << peer_desc_->uid;
+            transport_ctlr_->SetRemoteDescription(SdpType::kOffer, remote_description_.get());
+            transport_ctlr_->SetLocalDescription(SdpType::kAnswer, local_description_.get());
+        }
         else
         {
-            RTC_LOG(LS_WARNING) << "Invalid ICE role specified: " << (uint32_t)ice_role_;
-            throw TCEXCEPT("Invalid ICE role specified");
+            RTC_LOG(LS_ERROR) << "Invalid ice role specified " << ice_role;
         }
     }
 
@@ -366,6 +366,10 @@ namespace tincan
         vector<string> stun_servers)
     {
         cricket::ServerAddresses stun_addrs;
+        if (stun_servers.empty())
+        {
+            RTC_LOG(LS_INFO) << "No STUN Server address provided";
+        }
         for (auto stun_server : stun_servers)
         {
             rtc::SocketAddress stun_addr;
@@ -410,10 +414,16 @@ namespace tincan
     void
     VirtualLink::StartConnections()
     {
-        if (peer_desc_->cas.length() == 0)
-            throw TCEXCEPT("The vlink connection cannot be started as no connection"
-                           " candidates were specified in the vlink descriptor");
-        AddRemoteCandidates(peer_desc_->cas);
+        if (!network_thread_->IsCurrent())
+        {
+            return network_thread_->Invoke<void>(
+                RTC_FROM_HERE, rtc::Bind(&VirtualLink::StartConnections, this));
+        }
+        if (!pa_init_)
+            InitializePortAllocator();
+        if (peer_desc_->cas.length() != 0)
+            AddRemoteCandidates(peer_desc_->cas);
+        transport_ctlr_->MaybeStartGathering();
     }
 
     void VirtualLink::Disconnect()
@@ -442,7 +452,7 @@ namespace tincan
     {
         port_allocator_->set_flags(port_allocator_->flags() | cricket::PORTALLOCATOR_DISABLE_TCP);
         port_allocator_->Initialize();
-        transport_ctlr_->MaybeStartGathering();
+        pa_init_ = true;
         return true;
     }
 

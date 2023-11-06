@@ -36,7 +36,7 @@ namespace tincan
         TincanException(const string &arg, const char *file, int line);
         TincanException();
         ~TincanException() override;
-        virtual const char *what() const _NOEXCEPT override;
+        virtual const char *what() const noexcept override;
     };
 
 #define TCEXCEPT(ExtendedErrorInfo) TincanException(ExtendedErrorInfo, __FILE__, __LINE__);

@@ -59,6 +59,7 @@ namespace tincan
         virtual epoll_event &ChannelEvent() = 0;
         virtual void SetChannelEvent(unique_ptr<epoll_event> ev, int event_fd) = 0;
         virtual int FileDesc() = 0;
+        virtual bool IsGood() = 0;
         virtual void Close() = 0;
     };
     class EpollEngBase
@@ -78,7 +79,6 @@ namespace tincan
     private:
         static const std::array<int, 5> sig_codes;
         int epoll_fd_;
-        int signal_fd_;
         bool exit_flag_;
         unordered_map<int, shared_ptr<EpollChannel>> comm_channels_;
         bool HandleSignal_();

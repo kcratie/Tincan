@@ -59,6 +59,10 @@ namespace tincan
 
     void EpollEngine::Deregister(int fd)
     {
+        if (fd == -1)
+        {
+            return;
+        }
         int rc = epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr);
         if (rc == -1)
         {
@@ -79,32 +83,17 @@ namespace tincan
 
     void EpollEngine::HandleWrite_(int fd)
     {
-        try
+        auto ch = comm_channels_.at(fd);
+        ch->WriteNext();
+        if (!ch->CanWriteMore())
         {
-            auto ch = comm_channels_.at(fd);
-            ch->WriteNext();
-            if (!ch->CanWriteMore())
-            {
-                DisableEpollOut(ch->ChannelEvent());
-            }
-        }
-        catch (const std::exception &e)
-        {
-            RTC_LOG(LS_WARNING) << e.what();
+            DisableEpollOut(ch->ChannelEvent());
         }
     }
-
     void EpollEngine::HandleRead_(int fd)
     {
-        try
-        {
-            auto ch = comm_channels_.at(fd);
-            ch->ReadNext();
-        }
-        catch (const exception &e)
-        {
-            RTC_LOG(LS_WARNING) << e.what();
-        }
+        auto ch = comm_channels_.at(fd);
+        ch->ReadNext();
     }
 
     void EpollEngine::Epoll()
@@ -113,7 +102,10 @@ namespace tincan
         int num_fd = epoll_wait(epoll_fd_, &ev, 1, -1);
         if (exit_flag_)
             return;
-        if (num_fd > 0)
+        if (num_fd < 0)
+            throw TCEXCEPT("Epoll wait failure");
+
+        while (num_fd-- > 0)
         {
             if (ev.events & EPOLLIN)
             {
@@ -135,23 +127,20 @@ namespace tincan
                 Deregister(ev.data.fd);
             }
         }
-        else if (num_fd < 0)
-        {
-            throw TCEXCEPT("Epoll wait error");
-        }
     }
 
     void EpollEngine::Shutdown()
     {
         exit_flag_ = true;
+        if (epoll_fd_ == -1)
+            return;
         for (const auto &i : comm_channels_)
-            if (i.first != -1)
-                epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, i.first, nullptr);
+        {
+            epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, i.first, nullptr);
+            i.second->Close();
+        }
         comm_channels_.clear();
-        if (signal_fd_ != -1)
-            close(signal_fd_);
-        if (epoll_fd_ != -1)
-            close(epoll_fd_);
+        close(epoll_fd_);
     }
 
     void EpollEngine::EnableEpollOut(epoll_event &channel_ev)

@@ -33,7 +33,7 @@ namespace tincan
         {
 
             Json::Value stuns = desc["StunServers"];
-            for (Json::Value::ArrayIndex i = 0; i < stun_servers.size(); ++i)
+            for (Json::Value::ArrayIndex i = 0; i < stuns.size(); ++i)
             {
                 stun_servers.push_back(stuns[i].asString());
             }

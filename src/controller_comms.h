@@ -65,6 +65,7 @@ namespace tincan
             epfd_ = epoll_fd;
         }
         virtual int FileDesc() override { return fd_; }
+        virtual bool IsGood() override {return FileDesc() != -1;}
         virtual void Close() override;
 
         void ConnectToController();

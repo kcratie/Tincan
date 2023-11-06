@@ -32,7 +32,8 @@ namespace tincan
         : socket_name(socket_name),
           rcv_handler_(msg_handler),
           rsz_(0)
-    {}
+    {
+    }
 
     ControllerCommsChannel::~ControllerCommsChannel()
     {
@@ -75,10 +76,10 @@ namespace tincan
 
     void ControllerCommsChannel::QueueWrite(const string msg)
     {
-        {
-            lock_guard<mutex> lg(sendq_mutex_);
-            sendq_.push_back(msg);
-        }
+        lock_guard<mutex> lg(sendq_mutex_);
+        if (!IsGood())
+        return;
+        sendq_.push_back(msg);
         if (!(channel_ev->events & EPOLLOUT))
         {
             channel_ev->events |= EPOLLOUT;
@@ -123,8 +124,9 @@ namespace tincan
     {
         ctrl.SetRecipient("TincanTunnel");
         ctrl.SetSessionId(getpid());
-        QueueWrite(ctrl.StyledString());
-
+        auto ctl_str = ctrl.StyledString();
+        RTC_LOG(LS_INFO) << "Sending CONTROL: " << ctl_str;
+        QueueWrite(ctl_str);
     }
 
     void
@@ -140,11 +142,10 @@ namespace tincan
         if (rsz_ == 0)
         {
             nr = recv(fd_, &rsz_, sizeof(rsz_), 0);
-
         }
         else
         {
-            rbuf_ = make_unique<vector<char>>((size_t)rsz_+1, 0);
+            rbuf_ = make_unique<vector<char>>((size_t)rsz_ + 1, 0);
             nr = recv(fd_, rbuf_->data(), rsz_, 0);
             if (nr > 0)
             {
@@ -165,8 +166,7 @@ namespace tincan
         {
             shutdown(channel_ev->data.fd, SHUT_RDWR);
             close(channel_ev->data.fd);
-            channel_ev->data.fd = -1;
-            channel_ev.reset();
+            channel_ev->data.fd = fd_ = -1;
         }
     }
 } // namespace tincan

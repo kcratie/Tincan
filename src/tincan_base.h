@@ -73,14 +73,11 @@ namespace tincan
     using std::stack;
     using std::string;
     using std::stringstream;
-    using std::thread;
     using std::unique_ptr;
     using std::unordered_map;
     using std::vector;
     using std::chrono::milliseconds;
     using std::chrono::steady_clock;
-    using iob_t = vector<char>;
-
     class InputParser
     {
     public:
@@ -141,11 +138,8 @@ namespace tincan
             log_config = cli.getCmdOption("-l");
             tunnel_id = cli.getCmdOption("-t");
         }
-        static const uint16_t kMaxMtuSize = 1500;
-        static const uint16_t kTapHeaderSize = 2;
-        static const uint16_t kEthHeaderSize = 14;
-        static const uint16_t kEthernetSize = kEthHeaderSize + kMaxMtuSize;
-        static const uint16_t kTapBufferSize = kMaxMtuSize;
+        static const uint16_t kFrameBufferSz = 1500;
+        static const uint16_t kTincanMaxMtuSz = 1410;
         static const char kCandidateDelim = ':';
         const char *const kIceUfrag = "+001EVIOICEUFRAG";
         const char *const kIcePwd = "+00000001EVIOICEPASSWORD";

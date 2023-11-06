@@ -58,7 +58,6 @@ namespace tincan
         LogMessage::SetLogToStderr(true);
         if (!tp.log_config.empty())
         {
-            // create Json from full request
             Json::CharReaderBuilder b;
             Json::CharReader *parser = b.newCharReader();
             Json::String errs;
@@ -85,7 +84,7 @@ namespace tincan
             ConfigureLogging(ctrl);
         }
         // Register signal handlers
-        //todo: handle signal in epoll engine
+        // todo: handle signal in epoll engine
         self_ = this;
         struct sigaction shutdwm;
         memset(&shutdwm, 0, sizeof(struct sigaction));
@@ -113,9 +112,7 @@ namespace tincan
             &threads_);
         unique_ptr<TapDescriptor> tap_desc = make_unique<TapDescriptor>(
             tnl_desc["TapName"].asString(),
-            tnl_desc["IP4"].asString(),
-            tnl_desc["IP4PrefixLen"].asUInt(),
-            tnl_desc[TincanControl::MTU4].asUInt());
+            tnl_desc[TincanControl::MTU].asUInt());
         Json::Value network_ignore_list =
             tnl_desc[TincanControl::IgnoredNetInterfaces];
         int count = network_ignore_list.size();
@@ -135,31 +132,44 @@ namespace tincan
     Tincan::CreateVlink(
         TincanControl &control)
     {
+        bool role = false;
         auto resp = make_unique<Json::Value>(Json::objectValue);
         Json::Value &tnl_info = (*resp)[TincanControl::Message];
-
         Json::Value &link_desc = control.GetRequest();
         if (!tunnel_)
         {
             CreateTunnel(link_desc, tnl_info);
+            role = true;
         }
         else
         {
             tunnel_->QueryInfo(tnl_info);
         }
-        unique_ptr<PeerDescriptor> peer_desc = make_unique<PeerDescriptor>();
-        peer_desc->uid =
-            link_desc[TincanControl::PeerInfo][TincanControl::UID].asString();
-        peer_desc->vip4 =
-            link_desc[TincanControl::PeerInfo][TincanControl::VIP4].asString();
-        peer_desc->cas =
-            link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString();
-        peer_desc->fingerprint =
-            link_desc[TincanControl::PeerInfo][TincanControl::FPR].asString();
-        peer_desc->mac_address =
-            link_desc[TincanControl::PeerInfo][TincanControl::MAC].asString();
-
-        shared_ptr<VirtualLink> vlink = tunnel_->CreateVlink(std::move(peer_desc));
+        shared_ptr<VirtualLink> vlink = tunnel_->Vlink();
+        if (!vlink)
+        {
+            unique_ptr<PeerDescriptor> peer_desc = make_unique<PeerDescriptor>();
+            peer_desc->uid =
+                link_desc[TincanControl::PeerInfo][TincanControl::UID].asString();
+            peer_desc->cas =
+                link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString();
+            peer_desc->fingerprint =
+                link_desc[TincanControl::PeerInfo][TincanControl::FPR].asString();
+            peer_desc->mac_address =
+                link_desc[TincanControl::PeerInfo][TincanControl::MAC].asString();
+            vlink = tunnel_->CreateVlink(std::move(peer_desc), role);
+            vlink->SignalLocalCasReady.connect(this, &Tincan::OnLocalCasUpdated);
+            unique_ptr<TincanControl> ctrl = make_unique<TincanControl>(control);
+            ctrl->SetResponse(std::move(resp));
+            std::lock_guard<std::mutex> lg(inprogess_controls_mutex_);
+            inprogess_controls_[control.GetTransactionId()] = std::move(ctrl);
+            vlink->SetCasReadyId(control.GetTransactionId());
+            tunnel_->StartConnections();
+        }
+        else
+        {
+            vlink->PeerCandidates(link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString());
+        }
         if (vlink->IsGatheringComplete())
         {
             (*resp)[TincanControl::Message][TincanControl::CAS] = vlink->Candidates();
@@ -167,12 +177,6 @@ namespace tincan
             control.SetResponse(std::move(resp));
             return true;
         }
-        unique_ptr<TincanControl> ctrl = make_unique<TincanControl>(control);
-        ctrl->SetResponse(std::move(resp));
-        std::lock_guard<std::mutex> lg(inprogess_controls_mutex_);
-        inprogess_controls_[control.GetTransactionId()] = std::move(ctrl);
-        vlink->SetCasReadyId(control.GetTransactionId());
-        vlink->SignalLocalCasReady.connect(this, &Tincan::OnLocalCasUpdated);
         return false;
     }
 
@@ -207,8 +211,8 @@ namespace tincan
         const Json::Value &tnl_desc)
     {
         RTC_LOG(LS_INFO) << "Removing Tunnel " << tunnel_->Descriptor().uid;
-        tunnel_->Shutdown();
         epoll_eng_.Deregister(tunnel_->TapChannel()->FileDesc());
+        tunnel_->Shutdown();
         tunnel_.reset();
     }
 
@@ -289,12 +293,9 @@ namespace tincan
     {
         exit_flag_ = true;
         RTC_LOG(LS_INFO) << "Tincan shutdown initiated";
-        epoll_eng_.Deregister(channel_->FileDesc());
-        channel_->Close();
-        epoll_eng_.Deregister(tunnel_->TapChannel()->FileDesc());
+        epoll_eng_.Shutdown();
         tunnel_->Shutdown();
         tunnel_.reset();
-        epoll_eng_.Shutdown();
     }
 
     /*
@@ -313,23 +314,21 @@ namespace tincan
 
     void
     Tincan::Run()
-    {
+    {      
         epoll_eng_.Register(channel_, EPOLLIN);
         RegisterDataplane();
-        do
+        try
         {
-            try
+            while (!exit_flag_)
             {
-                while (!exit_flag_)
-                {
-                    epoll_eng_.Epoll();
-                }
+                epoll_eng_.Epoll();
             }
-            catch (const std::exception &e)
-            {
-                RTC_LOG(LS_INFO) << e.what();
-            }
-        } while (!exit_flag_);
+        }
+        catch (const std::exception &e)
+        {
+            RTC_LOG(LS_ERROR) << e.what();
+            Shutdown();
+        }
         RTC_LOG(LS_INFO) << "Tincan shutdown completed";
     }
 
@@ -399,6 +398,7 @@ namespace tincan
             channel_->Deliver(control);
         } // else respond when CAS is available
     }
+
     void
     Tincan::CreateTunnel(
         TincanControl &control)

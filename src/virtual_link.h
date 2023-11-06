@@ -23,6 +23,7 @@
 #ifndef TINCAN_VIRTUAL_LINK_H_
 #define TINCAN_VIRTUAL_LINK_H_
 #include "tincan_base.h"
+#include "buffer_pool.h"
 #include "rtc_base/async_packet_socket.h"
 #include "rtc_base/strings/json.h"
 #include "rtc_base/network.h"
@@ -88,7 +89,7 @@ namespace tincan
 
         bool IsReady();
 
-        void Transmit(unique_ptr<iob_t> frame);
+        void Transmit(unique_ptr<Iob> frame);
 
         string Candidates();
 
@@ -126,7 +127,7 @@ namespace tincan
         sigslot::signal1<string, single_threaded> SignalLinkUp;
         sigslot::signal1<string, single_threaded> SignalLinkDown;
         sigslot::signal2<uint64_t, string> SignalLocalCasReady;
-        sigslot::signal3<uint8_t *, uint32_t, VirtualLink &> SignalMessageReceived;
+        sigslot::signal2<const char *, size_t> SignalMessageReceived;
 
     private:
         cricket::ServerAddresses SetupSTUN(
@@ -152,7 +153,8 @@ namespace tincan
 
         void SetupICE(
             unique_ptr<SSLIdentity> sslid,
-            unique_ptr<SSLFingerprint> local_fingerprint);
+            unique_ptr<SSLFingerprint> local_fingerprint,
+            cricket::IceRole ice_role);
 
         void OnReadPacket(
             PacketTransportInternal *transport,
@@ -170,12 +172,12 @@ namespace tincan
         std::mutex cas_mutex_;
         cricket::Candidates local_candidates_;
         cricket::IceRole ice_role_;
-        ConnectionRole conn_role_;
+        ConnectionRole local_conn_role_;
         cricket::DtlsTransportInternal *dtls_transport_;
         unique_ptr<cricket::SessionDescription> local_description_;
         unique_ptr<cricket::SessionDescription> remote_description_;
         unique_ptr<SSLFingerprint> remote_fingerprint_;
-        string content_name_; // mid
+        string content_name_;
         PacketOptions packet_options_;
         BasicPacketSocketFactory packet_factory_;
         unique_ptr<cricket::PortAllocator> port_allocator_;
@@ -186,6 +188,7 @@ namespace tincan
         rtc::Thread *signaling_thread_;
         rtc::Thread *network_thread_;
         uint64_t cas_ready_id_;
+        bool pa_init_;
     };
 } // namespace tincan
 #endif // !TINCAN_VIRTUAL_LINK_H_

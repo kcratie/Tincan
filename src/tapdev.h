@@ -26,6 +26,7 @@
 
 #include "tincan_base.h"
 #include "epoll_engine.h"
+#include "buffer_pool.h"
 
 #include "rtc_base/logging.h"
 #include "rtc_base/third_party/sigslot/sigslot.h"
@@ -41,17 +42,10 @@ namespace tincan
     {
         TapDescriptor(
             string name,
-            string ip4,
-            uint32_t prefix4,
-            uint32_t mtu4)
-            : name{name}, ip4{ip4}, prefix4{prefix4}, mtu4{mtu4}, prefix6{0}, mtu6{0} {}
+            uint32_t mtu)
+            : name{name}, mtu{mtu} {}
         const string name;
-        string ip4;
-        uint32_t prefix4;
-        uint32_t mtu4;
-        string ip6;
-        uint32_t prefix6;
-        uint32_t mtu6;
+        uint32_t mtu;
     };
 
     class TapDev : public EpollChannel
@@ -61,7 +55,7 @@ namespace tincan
         TapDev(TapDev &) = delete;
         ~TapDev() override;
         TapDev &operator=(TapDev &) = delete;
-        sigslot::signal1<iob_t *> read_completion_;
+        sigslot::signal1<Iob *> read_completion_;
         void Open(
             const TapDescriptor &tap_desc);
         uint16_t Mtu();
@@ -70,7 +64,7 @@ namespace tincan
         MacAddressType MacAddress();
 
         //////////////////////////////////////////////////
-        void QueueWrite(unique_ptr<iob_t> msg);
+        void QueueWrite(unique_ptr<Iob> msg);
         virtual void WriteNext() override;
         virtual void ReadNext() override;
         virtual bool CanWriteMore() override;
@@ -81,6 +75,7 @@ namespace tincan
             epfd_ = epoll_fd;
         }
         virtual int FileDesc() override { return fd_; }
+        virtual bool IsGood() override { return FileDesc() != -1; }
         virtual void Close() override;
 
     private:
@@ -89,9 +84,9 @@ namespace tincan
         int fd_;
         bool is_down_;
         unique_ptr<epoll_event> channel_ev;
-        unique_ptr<iob_t> wbuf_;
+        unique_ptr<Iob> wbuf_;
         mutex sendq_mutex_;
-        deque<iob_t> sendq_;
+        deque<Iob> sendq_;
         int epfd_;
         struct ifreq ifr_;
         MacAddressType mac_;

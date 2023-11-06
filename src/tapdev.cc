@@ -28,8 +28,6 @@
 
 namespace tincan
 {
-
-    extern TincanParameters tp;
     static const char *const TUN_PATH = "/dev/net/tun";
 
     TapDev::TapDev() : fd_(-1), is_down_(true), epfd_(-1)
@@ -40,7 +38,6 @@ namespace tincan
 
     TapDev::~TapDev()
     {
-        Down();
         Close();
     }
 
@@ -142,14 +139,13 @@ namespace tincan
     }
     ///////////////////////////////////////////////////////////////////////////
     // EpollChannel interface
-    void TapDev::QueueWrite(unique_ptr<iob_t> msg)
+    void TapDev::QueueWrite(unique_ptr<Iob> msg)
     {
-        if (is_down_)
+
+        lock_guard<mutex> lg(sendq_mutex_);
+        if (is_down_ || !IsGood())
             return;
-        {
-            lock_guard<mutex> lg(sendq_mutex_);
-            sendq_.push_back(*msg.release());
-        }
+        sendq_.push_back(std::move(*msg.get()));
         if (!(channel_ev->events & EPOLLOUT))
         {
             channel_ev->events |= EPOLLOUT;
@@ -160,25 +156,39 @@ namespace tincan
 
     void TapDev::WriteNext()
     {
+
+        // if (sendq_.empty())
+        // {
+        //     // disable EPOLLOUT
+        //     if (channel_ev->events & EPOLLOUT)
+        //     {
+        //         channel_ev->events &= ~EPOLLOUT;
+        //         epoll_ctl(epfd_, EPOLL_CTL_MOD, channel_ev->data.fd, channel_ev.get());
+        //     }
+        // }
+        // else
+
         lock_guard<mutex> lg(sendq_mutex_);
-        if (sendq_.empty())
-        {
-            // disable EPOLLOUT
-            if (channel_ev->events & EPOLLOUT)
-            {
-                channel_ev->events &= ~EPOLLOUT;
-                epoll_ctl(epfd_, EPOLL_CTL_MOD, channel_ev->data.fd, channel_ev.get());
-            }
-        }
-        else
+        if (!sendq_.empty())
         {
             ssize_t nw = 0;
-            auto wiob = sendq_.front();
-            sendq_.pop_front();
+            Iob &wiob = sendq_.front();
             nw = write(fd_, wiob.data(), wiob.size());
+
             if (nw < 0)
             {
-                throw TCEXCEPT("TAP write failed");
+                RTC_LOG(LS_WARNING) << "TAP write failed";
+                // throw TCEXCEPT("TAP write failed");
+            }
+            if ((size_t)nw == wiob.size())
+            {
+                sendq_.pop_front();
+            }
+            else if ((size_t)nw < wiob.size())
+            {
+                // less than requested was written
+                // resize and leave on sendq
+                wiob.size(wiob.size() - nw);
             }
         }
     }
@@ -192,27 +202,32 @@ namespace tincan
     void TapDev::ReadNext()
     {
         ssize_t nr = 0;
-        unique_ptr<iob_t> riob = make_unique<iob_t>((size_t)tp.kTapBufferSize, 0);
-        nr = read(fd_, riob->data(), riob->size());
+        unique_ptr<Iob> riob = make_unique<Iob>();
+        nr = read(fd_, riob->buf(), riob->capacity());
         if (nr > 0)
         {
-            riob->resize(nr);
+            riob->size(nr);
             read_completion_(riob.release());
         }
         else if (nr < 0)
         {
-            throw TCEXCEPT("TAP read failed");
+            RTC_LOG(LS_WARNING) << "TAP read failed";
+            // throw TCEXCEPT("TAP read failed");
         }
     }
 
     void
     TapDev::Close()
     {
-        if (channel_ev && channel_ev->data.fd != -1)
+        Down();
+        if (fd_ != -1)
         {
-            close(channel_ev->data.fd);
+            close(fd_);
+            fd_ = -1;
+        }
+        if (channel_ev)
+        {
             channel_ev->data.fd = -1;
-            channel_ev.reset();
         }
     }
 } // tincan

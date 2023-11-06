@@ -60,7 +60,7 @@ namespace tincan
         class TransmitMsgData : public MessageData
         {
         public:
-            unique_ptr<iob_t> frm;
+            unique_ptr<Iob> frm;
         };
         class LinkInfoMsgData : public MessageData
         {
@@ -85,8 +85,8 @@ namespace tincan
         class TapMessageData : public MessageData
         {
         public:
-            unique_ptr<iob_t> iob_;
-            TapMessageData(unique_ptr<iob_t> iob) : iob_(std::move(iob))
+            unique_ptr<Iob> iob_;
+            TapMessageData(unique_ptr<Iob> iob) : iob_(std::move(iob))
             {
             }
             ~TapMessageData() = default;
@@ -104,7 +104,7 @@ namespace tincan
             const vector<string> &ignored_list);
 
         shared_ptr<VirtualLink> CreateVlink(
-            unique_ptr<PeerDescriptor> peer_desc);
+            unique_ptr<PeerDescriptor> peer_desc, bool role);
 
         TunnelDesc &Descriptor();
 
@@ -113,6 +113,8 @@ namespace tincan
         string Name();
 
         string MacAddress();
+
+        void StartConnections();
 
         shared_ptr<EpollChannel> TapChannel() { return tdev_; }
 
@@ -137,23 +139,20 @@ namespace tincan
             const string &vlink_id);
         //
         void VlinkReadComplete(
-            uint8_t *data,
-            uint32_t data_len,
-            VirtualLink &vlink);
+            const char *data,
+            size_t data_len);
         //
         void TapReadComplete(
-            iob_t *iob_rd);
+            Iob *iob);
         // MessageHandler overrides
         void OnMessage(
             Message *msg) override;
 
+        shared_ptr<VirtualLink> Vlink() { return vlink_; }
+
     private:
         void SetIgnoredNetworkInterfaces(
             const vector<string> &ignored_list);
-
-        unique_ptr<VirtualLink> CreateVlink(
-            unique_ptr<PeerDescriptor> peer_desc,
-            cricket::IceRole ice_role);
 
         void VLinkUp(
             string vlink_id);

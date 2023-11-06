@@ -111,7 +111,7 @@ namespace tincan
         static const Json::StaticString Level;
         static const Json::StaticString MAC;
         static const Json::StaticString Message;
-        static const Json::StaticString MTU4;
+        static const Json::StaticString MTU;
         static const Json::StaticString NodeId;
         static const Json::StaticString PeerInfo;
         static const Json::StaticString ProtocolVersion;
