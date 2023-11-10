@@ -38,23 +38,31 @@ namespace tincan
         tdev_ = make_shared<TapDev>();
     }
 
-    void
+    int
     BasicTunnel::Configure(
         unique_ptr<TapDescriptor> tap_desc,
         const vector<string> &ignored_list)
     {
         tap_desc_ = std::move(tap_desc);
-        tdev_->Open(*tap_desc_.get());
+        if (tdev_->Open(*tap_desc_.get()) == -1)
+            return -1;
 
         // create X509 identity for secure connections
         string sslid_name = descriptor_->node_id + descriptor_->uid;
         sslid_ = rtc::SSLIdentity::Create(sslid_name, rtc::KT_RSA);
         if (!sslid_)
-            throw TCEXCEPT("Failed to generate SSL Identity");
+        {
+            RTC_LOG(LS_ERROR) << "Failed to generate SSL Identity";
+            return -1;
+        }
         local_fingerprint_ = rtc::SSLFingerprint::CreateUnique("sha-512", *sslid_.get());
         if (!local_fingerprint_)
-            throw TCEXCEPT("Failed to create the local fingerprint");
+        {
+            RTC_LOG(LS_ERROR) << "Failed to create the local fingerprint";
+            return -1;
+        }
         SetIgnoredNetworkInterfaces(ignored_list);
+        return 0;
     }
 
     void
@@ -184,13 +192,16 @@ namespace tincan
         }
     }
 
-    void BasicTunnel::RemoveLink(
+    int BasicTunnel::RemoveLink(
         const string &vlink_id)
     {
         if (!vlink_)
-            return;
+            return 0;
         if (vlink_->Id() != vlink_id)
-            throw TCEXCEPT("The specified VLink ID does not match this Tunnel");
+        {
+            RTC_LOG(LS_ERROR) << "The specified VLink ID does not match this Tunnel";
+            return -1;
+        }
         if (vlink_->IsReady())
         {
             LinkInfoMsgData md;
@@ -198,6 +209,7 @@ namespace tincan
             md.msg_event.Wait(Event::kForever);
         }
         vlink_.reset();
+        return 0;
     }
 
     void BasicTunnel::VlinkReadComplete(
@@ -209,10 +221,14 @@ namespace tincan
     }
 
     void BasicTunnel::TapReadComplete(
-        Iob* iob)
+        Iob *iob)
     {
         if (!vlink_)
+        {
+            RTC_LOG(LS_ERROR) << "No vlink for transmit";
+            delete iob;
             return;
+        }
         if (NetworkThread()->IsCurrent())
             vlink_->Transmit(unique_ptr<Iob>(iob));
         else
@@ -307,7 +323,7 @@ namespace tincan
         }
         break;
         }
-        // Todo: who owns and should delete msg;
+        //msg is deleted elsewhere
     }
 
 } // namespace tincan

@@ -133,7 +133,7 @@ namespace tincan
         } while (iss);
         webrtc::RTCError err = transport_ctlr_->AddRemoteCandidates(content_name_, cas_vec);
         if (!err.ok())
-            throw TCEXCEPT(string("Failed to add remote candidates - ") + err.message());
+            RTC_LOG(LS_ERROR) << string("Failed to add remote candidates - ") + err.message();
         return;
     }
 

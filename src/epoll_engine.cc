@@ -71,24 +71,10 @@ namespace tincan
         comm_channels_.erase(fd);
     }
 
-    void EpollEngine::CheckChannelQueues_()
-    {
-        for (auto i = comm_channels_.begin(); i != comm_channels_.end(); i++)
-        {
-            auto ch = i->second;
-            if (ch->CanWriteMore())
-                EnableEpollOut(ch->ChannelEvent());
-        }
-    }
-
     void EpollEngine::HandleWrite_(int fd)
     {
         auto ch = comm_channels_.at(fd);
         ch->WriteNext();
-        if (!ch->CanWriteMore())
-        {
-            DisableEpollOut(ch->ChannelEvent());
-        }
     }
     void EpollEngine::HandleRead_(int fd)
     {

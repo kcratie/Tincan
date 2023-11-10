@@ -56,7 +56,7 @@ namespace tincan
         ~TapDev() override;
         TapDev &operator=(TapDev &) = delete;
         sigslot::signal1<Iob *> read_completion_;
-        void Open(
+        int Open(
             const TapDescriptor &tap_desc);
         uint16_t Mtu();
         void Up();
@@ -67,7 +67,6 @@ namespace tincan
         void QueueWrite(unique_ptr<Iob> msg);
         virtual void WriteNext() override;
         virtual void ReadNext() override;
-        virtual bool CanWriteMore() override;
         virtual epoll_event &ChannelEvent() override { return *channel_ev.get(); }
         virtual void SetChannelEvent(unique_ptr<epoll_event> ev, int epoll_fd) override
         {

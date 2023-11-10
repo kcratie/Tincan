@@ -99,7 +99,7 @@ namespace tincan
 
         ~BasicTunnel() = default;
 
-        void Configure(
+        int Configure(
             unique_ptr<TapDescriptor> tap_desc,
             const vector<string> &ignored_list);
 
@@ -135,7 +135,7 @@ namespace tincan
 
         void Start();
 
-        void RemoveLink(
+        int RemoveLink(
             const string &vlink_id);
         //
         void VlinkReadComplete(

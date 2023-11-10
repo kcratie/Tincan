@@ -64,9 +64,9 @@ namespace tincan
             auto logcfg = make_unique<Json::Value>();
             if (!parser->parse(tp.log_config.c_str(), tp.log_config.c_str() + tp.log_config.length(), logcfg.get(), &errs))
             {
-                string errmsg = "Unable to parse json control object - ";
-                errmsg.append(tp.log_config);
-                throw TCEXCEPT(errmsg.c_str());
+                string emsg = "Unable to parse logging config - ";
+                emsg.append(tp.log_config);
+                RTC_LOG(LS_ERROR) << emsg;
             }
             TincanControl ctrl(std::move(logcfg));
             ConfigureLogging(ctrl);
@@ -168,8 +168,9 @@ namespace tincan
         }
         else
         {
-            vlink->PeerCandidates(link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString());
-        }
+            vlink->PeerCandidates(
+                link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString());
+                }
         if (vlink->IsGatheringComplete())
         {
             (*resp)[TincanControl::Message][TincanControl::CAS] = vlink->Candidates();
@@ -223,7 +224,10 @@ namespace tincan
         const string tnl_id = link_desc[TincanControl::TunnelId].asString();
         const string vlid = link_desc[TincanControl::LinkId].asString();
         if (tnl_id.empty() || vlid.empty())
-            throw TCEXCEPT("Required identifier not specified");
+        {
+            RTC_LOG(LS_ERROR) << "Cannot remove link as the required identifier was not specified";
+            return;
+        }
         tunnel_->RemoveLink(vlid);
     }
 
@@ -314,7 +318,7 @@ namespace tincan
 
     void
     Tincan::Run()
-    {      
+    {
         epoll_eng_.Register(channel_, EPOLLIN);
         RegisterDataplane();
         try
@@ -361,6 +365,7 @@ namespace tincan
                     log_lvl = req["ConsoleLevel"].asString();
                 LogMessage::LogToDebug(log_levels_.at(log_lvl));
             }
+            // LogMessage::SetLogToStderr(false);
         }
         catch (exception &)
         {

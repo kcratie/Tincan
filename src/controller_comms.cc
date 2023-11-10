@@ -78,7 +78,7 @@ namespace tincan
     {
         lock_guard<mutex> lg(sendq_mutex_);
         if (!IsGood())
-        return;
+            return;
         sendq_.push_back(msg);
         if (!(channel_ev->events & EPOLLOUT))
         {
@@ -96,6 +96,9 @@ namespace tincan
             lock_guard<mutex> lg(sendq_mutex_);
             if (sendq_.empty())
             {
+                
+                channel_ev->events &= ~EPOLLOUT;
+                epoll_ctl(epfd_, EPOLL_CTL_MOD, channel_ev->data.fd, channel_ev.get());
                 return;
             }
             wbuf_ = make_unique<string>(sendq_.front());
@@ -110,30 +113,8 @@ namespace tincan
         }
         if (nw < 0)
         {
-            throw TCEXCEPT("Failed to send data to controller");
+            RTC_LOG(LS_ERROR) <<"Failed to send data to controller - " << strerror(errno);
         }
-    }
-
-    bool ControllerCommsChannel::CanWriteMore()
-    {
-        lock_guard<mutex> lg(sendq_mutex_);
-        return wbuf_ || !sendq_.empty();
-    }
-
-    void ControllerCommsChannel::Deliver(TincanControl &ctrl)
-    {
-        ctrl.SetRecipient("TincanTunnel");
-        ctrl.SetSessionId(getpid());
-        auto ctl_str = ctrl.StyledString();
-        RTC_LOG(LS_INFO) << "Sending CONTROL: " << ctl_str;
-        QueueWrite(ctl_str);
-    }
-
-    void
-    ControllerCommsChannel::Deliver(
-        unique_ptr<TincanControl> ctrl)
-    {
-        Deliver(*ctrl.get());
     }
 
     void ControllerCommsChannel::ReadNext()
@@ -155,8 +136,24 @@ namespace tincan
         }
         if (nr < 0)
         {
-            throw TCEXCEPT("Failed to receive data from controller");
+            RTC_LOG(LS_ERROR) <<"Failed to receive data from controller";
         }
+    }
+
+    void ControllerCommsChannel::Deliver(TincanControl &ctrl)
+    {
+        ctrl.SetRecipient("TincanTunnel");
+        ctrl.SetSessionId(getpid());
+        auto ctl_str = ctrl.StyledString();
+        // RTC_LOG(LS_INFO) << "Sending CONTROL: " << ctl_str;
+        QueueWrite(ctl_str);
+    }
+
+    void
+    ControllerCommsChannel::Deliver(
+        unique_ptr<TincanControl> ctrl)
+    {
+        Deliver(*ctrl.get());
     }
 
     void

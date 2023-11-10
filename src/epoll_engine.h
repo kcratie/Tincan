@@ -55,7 +55,6 @@ namespace tincan
         virtual ~EpollChannel() = default;
         virtual void WriteNext() = 0;
         virtual void ReadNext() = 0;
-        virtual bool CanWriteMore() = 0;
         virtual epoll_event &ChannelEvent() = 0;
         virtual void SetChannelEvent(unique_ptr<epoll_event> ev, int event_fd) = 0;
         virtual int FileDesc() = 0;
@@ -85,7 +84,6 @@ namespace tincan
         void HandleRead_(int fd);
         void HandleWrite_(int fd);
         void SetupSignalHandler_();
-        void CheckChannelQueues_();
 
     public:
         EpollEngine();

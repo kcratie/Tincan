@@ -41,48 +41,49 @@ namespace tincan
         Close();
     }
 
-    void TapDev::Open(
+    int TapDev::Open(
         const TapDescriptor &tap_desc)
     {
         string emsg("The Tap device open operation failed - ");
         if ((fd_ = open(TUN_PATH, O_RDWR)) < 0)
-            throw TCEXCEPT(emsg.c_str());
-        ifr_.ifr_flags = IFF_TAP | IFF_NO_PI;
-        if (tap_desc.name.length() >= IFNAMSIZ)
         {
-            emsg.append("the name length is longer than maximum allowed.");
-            throw TCEXCEPT(emsg.c_str());
+            RTC_LOG(LS_ERROR) << emsg << " - " << strerror(errno);
+            return -1;
         }
-        strncpy(ifr_.ifr_name, tap_desc.name.c_str(), tap_desc.name.length());
+        ifr_.ifr_flags = IFF_TAP | IFF_NO_PI;
+        size_t len = std::min(tap_desc.name.length(), (size_t)IFNAMSIZ);
+        strncpy(ifr_.ifr_name, tap_desc.name.c_str(), len);
         ifr_.ifr_name[tap_desc.name.length()] = 0;
         // create the device
         if (ioctl(fd_, TUNSETIFF, (void *)&ifr_) < 0)
         {
             emsg.append("the device could not be created.");
-            throw TCEXCEPT(emsg.c_str());
+            RTC_LOG(LS_ERROR) << emsg << " - " << strerror(errno);
+            return -1;
         }
         int cfg_skt;
         if ((cfg_skt = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
         {
             emsg.append("a socket bind failed.");
-            throw TCEXCEPT(emsg.c_str());
+            RTC_LOG(LS_ERROR) << emsg << " - " << strerror(errno);
+            return -1;
         }
-
         if ((ioctl(cfg_skt, SIOCGIFHWADDR, &ifr_)) < 0)
         {
             emsg.append("retrieving the device mac address failed");
             close(cfg_skt);
-            throw TCEXCEPT(emsg.c_str());
+            RTC_LOG(LS_ERROR) << emsg << " - " << strerror(errno);
+            return -1;
         }
         memcpy(mac_.data(), ifr_.ifr_hwaddr.sa_data, 6);
-
         if (ioctl(cfg_skt, SIOCGIFFLAGS, &ifr_) < 0)
         {
             close(cfg_skt);
-            throw TCEXCEPT(emsg.c_str());
+            RTC_LOG(LS_ERROR) << emsg << " - " << strerror(errno);
+            return -1;
         }
-
         close(cfg_skt);
+        return 0;
     }
 
     void TapDev::SetFlags_(
@@ -94,8 +95,7 @@ namespace tincan
         if ((cfg_skt = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
         {
             emsg.append("a socket bind failed.");
-            // throw TCEXCEPT(emsg.c_str());
-            RTC_LOG(LS_ERROR) << emsg;
+            RTC_LOG(LS_ERROR) << emsg << " - " << strerror(errno);
         }
         ifr_.ifr_flags |= enable;
         ifr_.ifr_flags &= ~disable;
@@ -103,8 +103,7 @@ namespace tincan
         if (ioctl(cfg_skt, SIOCSIFFLAGS, &ifr_) < 0)
         {
             close(cfg_skt);
-            // throw TCEXCEPT(emsg.c_str());
-            RTC_LOG(LS_ERROR) << emsg;
+            RTC_LOG(LS_ERROR) << emsg << " - " << strerror(errno);
         }
         close(cfg_skt);
     }
@@ -141,12 +140,13 @@ namespace tincan
     // EpollChannel interface
     void TapDev::QueueWrite(unique_ptr<Iob> msg)
     {
-
         lock_guard<mutex> lg(sendq_mutex_);
         if (is_down_ || !IsGood())
+        {
             return;
+        }
         sendq_.push_back(std::move(*msg.get()));
-        if (!(channel_ev->events & EPOLLOUT))
+        if ((channel_ev->events & EPOLLOUT) == 0)
         {
             channel_ev->events |= EPOLLOUT;
             epoll_ctl(epfd_, EPOLL_CTL_MOD,
@@ -156,29 +156,15 @@ namespace tincan
 
     void TapDev::WriteNext()
     {
-
-        // if (sendq_.empty())
-        // {
-        //     // disable EPOLLOUT
-        //     if (channel_ev->events & EPOLLOUT)
-        //     {
-        //         channel_ev->events &= ~EPOLLOUT;
-        //         epoll_ctl(epfd_, EPOLL_CTL_MOD, channel_ev->data.fd, channel_ev.get());
-        //     }
-        // }
-        // else
-
         lock_guard<mutex> lg(sendq_mutex_);
-        if (!sendq_.empty())
+        while (!sendq_.empty())
         {
             ssize_t nw = 0;
             Iob &wiob = sendq_.front();
             nw = write(fd_, wiob.data(), wiob.size());
-
             if (nw < 0)
             {
                 RTC_LOG(LS_WARNING) << "TAP write failed";
-                // throw TCEXCEPT("TAP write failed");
             }
             if ((size_t)nw == wiob.size())
             {
@@ -191,13 +177,10 @@ namespace tincan
                 wiob.size(wiob.size() - nw);
             }
         }
+        channel_ev->events &= ~EPOLLOUT;
+        epoll_ctl(epfd_, EPOLL_CTL_MOD, channel_ev->data.fd, channel_ev.get());
     }
 
-    bool TapDev::CanWriteMore()
-    {
-        lock_guard<mutex> lg(sendq_mutex_);
-        return !sendq_.empty();
-    }
 
     void TapDev::ReadNext()
     {
@@ -212,7 +195,6 @@ namespace tincan
         else if (nr < 0)
         {
             RTC_LOG(LS_WARNING) << "TAP read failed";
-            // throw TCEXCEPT("TAP read failed");
         }
     }
 

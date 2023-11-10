@@ -57,7 +57,6 @@ namespace tincan
         void QueueWrite(const string msg);
         virtual void WriteNext() override;
         virtual void ReadNext() override;
-        virtual bool CanWriteMore() override;
         virtual epoll_event &ChannelEvent() override { return *channel_ev.get(); }
         virtual void SetChannelEvent(unique_ptr<epoll_event> ev, int epoll_fd) override
         {
