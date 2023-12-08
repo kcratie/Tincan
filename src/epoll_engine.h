@@ -87,7 +87,11 @@ namespace tincan
 
     public:
         EpollEngine();
+        EpollEngine(const EpollEngine &) = delete;
+        EpollEngine(EpollEngine &&) = default;
         ~EpollEngine();
+        EpollEngine& operator=(const EpollEngine &) = delete;
+        EpollEngine& operator=(EpollEngine &&) = default;
         void Register(shared_ptr<EpollChannel>, int events);
         void Deregister(int fd);
         void Epoll();

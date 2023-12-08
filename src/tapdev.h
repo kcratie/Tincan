@@ -52,9 +52,11 @@ namespace tincan
     {
     public:
         TapDev();
-        TapDev(TapDev &) = delete;
+        TapDev(const TapDev &) = delete;
+        TapDev(TapDev &&) = delete;
         ~TapDev() override;
-        TapDev &operator=(TapDev &) = delete;
+        TapDev &operator=(const TapDev &) = delete;
+        TapDev &operator=(TapDev &&) = delete;
         sigslot::signal1<Iob *> read_completion_;
         int Open(
             const TapDescriptor &tap_desc);

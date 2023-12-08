@@ -33,18 +33,10 @@ namespace tincan
         emsg = ostr.str();
     }
 
-    TincanException::TincanException()
-    {
-    }
-
-    TincanException::~TincanException()
-    {
-    }
-
-    const char *
-    TincanException::what() const noexcept
-    {
-        return emsg.c_str();
-    }
+    // const char *
+    // TincanException::what() const noexcept
+    // {
+    //     return emsg.c_str();
+    // }
 
 } // tincan

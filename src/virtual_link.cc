@@ -76,13 +76,14 @@ namespace tincan
 
     void
     VirtualLink::Initialize(
-        BasicNetworkManager &network_manager,
         unique_ptr<SSLIdentity> sslid,
         unique_ptr<SSLFingerprint> local_fingerprint,
-        cricket::IceRole ice_role)
+        cricket::IceRole ice_role,
+        const vector<string> &ignored_list)
     {
         ice_role_ = ice_role;
-        port_allocator_.reset(new cricket::BasicPortAllocator(&network_manager));
+        net_manager_.set_network_ignore_list(ignored_list);
+        port_allocator_.reset(new cricket::BasicPortAllocator(&net_manager_));
         port_allocator_->SetConfiguration(
             SetupSTUN(vlink_desc_->stun_servers),
             SetupTURN(vlink_desc_->turn_descs),

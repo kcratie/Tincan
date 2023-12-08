@@ -34,9 +34,17 @@ namespace tincan
 
     public:
         TincanException(const string &arg, const char *file, int line);
-        TincanException();
-        ~TincanException() override;
-        virtual const char *what() const noexcept override;
+        TincanException() = default;
+        TincanException(const TincanException &) = default;
+        TincanException(TincanException &&) = default;
+        TincanException &operator=(const TincanException &) = default;
+        TincanException &operator=(TincanException &&) = default;
+
+        virtual ~TincanException() = default;
+        virtual const char *what() const noexcept override
+        {
+            return emsg.c_str();
+        }
     };
 
 #define TCEXCEPT(ExtendedErrorInfo) TincanException(ExtendedErrorInfo, __FILE__, __LINE__);

@@ -25,7 +25,6 @@
 #include "tincan_base.h"
 #include "rtc_base/event.h"
 #include "basic_tunnel.h"
-#include "tunnel_threads.h"
 #include "controller_comms.h"
 #include "epoll_engine.h"
 #include "rtc_base/logging.h"
@@ -54,9 +53,6 @@ namespace tincan
         void QueryTunnelInfo(
             const Json::Value &tnl_desc,
             Json::Value &node_info);
-
-        void RemoveTunnel(
-            const Json::Value &tnl_desc);
 
         void RemoveVlink(
             const Json::Value &link_desc);
@@ -89,19 +85,17 @@ namespace tincan
         void QueryTunnelInfo(TincanControl &control);
         void QueryCandidateAddressSet(TincanControl &control);
         void RemoveLink(TincanControl &control);
-        void RemoveTunnel(TincanControl &control);
         //
         bool exit_flag_;
         EpollEngine epoll_eng_;
-        TunnelThreads threads_;
         unordered_map<string, TCDSIP> dispatch_map_;
         unordered_map<string, LoggingSeverity> log_levels_;
-        shared_ptr<BasicTunnel> tunnel_;
         shared_ptr<ControllerCommsChannel> channel_;
         unique_ptr<FileRotatingLogSink> log_sink_;
         std::mutex inprogess_controls_mutex_;
         unordered_map<uint64_t, unique_ptr<TincanControl>> inprogess_controls_;
-
+        vector<string> if_list_;
+        unique_ptr<BasicTunnel> tunnel_;
         static Tincan *self_;
     };
 } // namespace tincan

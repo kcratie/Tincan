@@ -73,10 +73,10 @@ namespace tincan
         string Name();
 
         void Initialize(
-            BasicNetworkManager &network_manager,
             unique_ptr<SSLIdentity> sslid,
             unique_ptr<SSLFingerprint> local_fingerprint,
-            cricket::IceRole ice_role);
+            cricket::IceRole ice_role,
+            const vector<string> &ignored_list);
 
         PeerDescriptor &PeerInfo()
         {
@@ -167,6 +167,7 @@ namespace tincan
             PacketTransportInternal *transport,
             const SentPacket &packet);
 
+        rtc::BasicNetworkManager net_manager_;
         unique_ptr<VlinkDescriptor> vlink_desc_;
         unique_ptr<PeerDescriptor> peer_desc_;
         std::mutex cas_mutex_;

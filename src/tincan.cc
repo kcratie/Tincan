@@ -39,7 +39,6 @@ namespace tincan
                            {"QueryCandidateAddressSet", &Tincan::QueryCandidateAddressSet},
                            {"QueryLinkStats", &Tincan::QueryLinkStats},
                            {"QueryTunnelInfo", &Tincan::QueryTunnelInfo},
-                           {"RemoveTunnel", &Tincan::RemoveTunnel},
                            {"RemoveLink", &Tincan::RemoveLink},
                        },
                        log_levels_{
@@ -106,22 +105,20 @@ namespace tincan
         const Json::Value &tnl_desc,
         Json::Value &tnl_info)
     {
-        tunnel_ = make_shared<BasicTunnel>(
+        tunnel_ = make_unique<BasicTunnel>(
             make_unique<TunnelDesc>(tnl_desc),
-            channel_,
-            &threads_);
+            channel_);
         unique_ptr<TapDescriptor> tap_desc = make_unique<TapDescriptor>(
             tnl_desc["TapName"].asString(),
             tnl_desc[TincanControl::MTU].asUInt());
         Json::Value network_ignore_list =
             tnl_desc[TincanControl::IgnoredNetInterfaces];
         int count = network_ignore_list.size();
-        vector<string> if_list(count);
         for (int i = 0; i < count; i++)
         {
-            if_list[i] = network_ignore_list[i].asString();
+            if_list_.push_back(network_ignore_list[i].asString());
         }
-        tunnel_->Configure(std::move(tap_desc), if_list);
+        tunnel_->Configure(std::move(tap_desc));
         tunnel_->Start();
         tunnel_->QueryInfo(tnl_info);
         epoll_eng_.Register(tunnel_->TapChannel(), EPOLLIN);
@@ -157,7 +154,8 @@ namespace tincan
                 link_desc[TincanControl::PeerInfo][TincanControl::FPR].asString();
             peer_desc->mac_address =
                 link_desc[TincanControl::PeerInfo][TincanControl::MAC].asString();
-            vlink = tunnel_->CreateVlink(std::move(peer_desc), role);
+            vlink = tunnel_->CreateVlink(std::move(peer_desc), role, if_list_);
+            if_list_.clear();
             vlink->SignalLocalCasReady.connect(this, &Tincan::OnLocalCasUpdated);
             unique_ptr<TincanControl> ctrl = make_unique<TincanControl>(control);
             ctrl->SetResponse(std::move(resp));
@@ -205,16 +203,6 @@ namespace tincan
     {
         auto tnl_id = tnl_desc[TincanControl::TunnelId].asString();
         tunnel_->QueryInfo(tnl_info);
-    }
-
-    void
-    Tincan::RemoveTunnel(
-        const Json::Value &tnl_desc)
-    {
-        RTC_LOG(LS_INFO) << "Removing Tunnel " << tunnel_->Descriptor().uid;
-        epoll_eng_.Deregister(tunnel_->TapChannel()->FileDesc());
-        tunnel_->Shutdown();
-        tunnel_.reset();
     }
 
     void
@@ -298,8 +286,8 @@ namespace tincan
         exit_flag_ = true;
         RTC_LOG(LS_INFO) << "Tincan shutdown initiated";
         epoll_eng_.Shutdown();
-        tunnel_->Shutdown();
-        tunnel_.reset();
+        // tunnel_->Shutdown();
+        // tunnel_.reset();
     }
 
     /*
@@ -524,29 +512,6 @@ namespace tincan
         catch (exception &e)
         {
             msg = "The RemoveLink operation failed.";
-            RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n"
-                                << control.StyledString();
-        }
-        control.SetResponse(msg, status);
-        channel_->Deliver(control);
-    }
-
-    void
-    Tincan::RemoveTunnel(
-        TincanControl &control)
-    {
-        bool status = false;
-        Json::Value &req = control.GetRequest();
-        string msg("The RemoveTunnel operation ");
-        try
-        {
-            RemoveTunnel(req);
-            status = true;
-            msg.append("succeeded.");
-        }
-        catch (exception &e)
-        {
-            msg = "failed.";
             RTC_LOG(LS_WARNING) << e.what() << ". Control Data=\n"
                                 << control.StyledString();
         }

@@ -23,12 +23,6 @@
 #ifndef BASIC_TUNNEL_H_
 #define BASIC_TUNNEL_H_
 #include "tincan_base.h"
-#ifdef min
-#undef min
-#endif //
-#ifdef max
-#undef max
-#endif //
 #include "rtc_base/ssl_identity.h"
 #include "rtc_base/third_party/sigslot/sigslot.h"
 #include "rtc_base/strings/json.h"
@@ -36,7 +30,6 @@
 #include "tincan_exception.h"
 #include "tunnel_descriptor.h"
 #include "virtual_link.h"
-#include "tunnel_threads.h"
 #include "controller_comms.h"
 namespace tincan
 {
@@ -57,54 +50,85 @@ namespace tincan
             MSGID_TAP_UP,
             MSGID_TAP_DOWN
         };
+
         class TransmitMsgData : public MessageData
         {
         public:
+            TransmitMsgData()=default;
+            TransmitMsgData(const TransmitMsgData &rhs) = delete;
+            TransmitMsgData(TransmitMsgData &&rhs) : frm(std::move(rhs.frm)) {}
+            virtual ~TransmitMsgData() = default;
+            TransmitMsgData &operator=(const TransmitMsgData &rhs) = delete;
+            TransmitMsgData &operator=(TransmitMsgData &&rhs)
+            {
+                if (this != &rhs)
+                {
+                    frm = std::move(rhs.frm);
+                }
+                return *this;
+            }
+            TransmitMsgData &operator=(unique_ptr<Iob> &&rhs)
+            {
+                if (&frm != &rhs)
+                {
+                    frm = std::move(rhs);
+                }
+                return *this;
+            }
             unique_ptr<Iob> frm;
         };
+
         class LinkInfoMsgData : public MessageData
         {
         public:
             shared_ptr<VirtualLink> vl;
-            Json::Value info;
-            rtc::Event msg_event;
-            LinkInfoMsgData() : info(Json::arrayValue), msg_event(false, false) {}
-            ~LinkInfoMsgData() = default;
-        };
-        class LinkMsgData : public MessageData
-        {
-        public:
-            shared_ptr<VirtualLink> vl;
-            rtc::Event msg_event;
-            LinkMsgData() : msg_event(false, false)
+            Json::Value *info;
+            rtc::Event *msg_event;
+            LinkInfoMsgData() : info(new Json::Value(Json::arrayValue)), msg_event(new rtc::Event(false, false)) {}
+            LinkInfoMsgData(const LinkInfoMsgData &rhs)=delete;
+            LinkInfoMsgData(LinkInfoMsgData &&rhs):vl(rhs.vl), info(rhs.info), msg_event(rhs.msg_event)
             {
+                rhs.vl.reset();
+                rhs.info = nullptr;
+                rhs.msg_event=nullptr;
             }
-            ~LinkMsgData() = default;
+            LinkInfoMsgData &operator=(const LinkInfoMsgData&)=delete;
+            LinkInfoMsgData &operator=(LinkInfoMsgData &rhs)
+            {
+                if( this != &rhs)
+                {
+                    vl = rhs.vl;
+                    rhs.vl.reset();
+                    info = rhs.info;
+                    rhs.info = nullptr;
+                    msg_event = rhs.msg_event;
+                    rhs.msg_event=nullptr;
+                }
+                return *this;
+            }  
+            virtual ~LinkInfoMsgData()
+            {
+                delete info;
+                delete msg_event;
+            }
         };
 
-        class TapMessageData : public MessageData
-        {
-        public:
-            unique_ptr<Iob> iob_;
-            TapMessageData(unique_ptr<Iob> iob) : iob_(std::move(iob))
-            {
-            }
-            ~TapMessageData() = default;
-        };
-
+        BasicTunnel()=delete;
         BasicTunnel(
             unique_ptr<TunnelDesc> descriptor,
-            shared_ptr<ControllerCommsChannel> ctrl_handle,
-            TunnelThreads *thread_pool);
-
-        ~BasicTunnel() = default;
+            shared_ptr<ControllerCommsChannel> ctrl_handle);
+        BasicTunnel(const BasicTunnel &)=delete;
+        BasicTunnel& operator=(const BasicTunnel &)=delete;
+        BasicTunnel(BasicTunnel &&rhs);
+        BasicTunnel& operator=(BasicTunnel &&rhs);
+        ~BasicTunnel();
 
         int Configure(
-            unique_ptr<TapDescriptor> tap_desc,
-            const vector<string> &ignored_list);
+            unique_ptr<TapDescriptor> tap_desc);
 
         shared_ptr<VirtualLink> CreateVlink(
-            unique_ptr<PeerDescriptor> peer_desc, bool role);
+            unique_ptr<PeerDescriptor> peer_desc, bool role,
+            const vector<string> &ignored_list);
 
         TunnelDesc &Descriptor();
 
@@ -151,8 +175,6 @@ namespace tincan
         shared_ptr<VirtualLink> Vlink() { return vlink_; }
 
     private:
-        void SetIgnoredNetworkInterfaces(
-            const vector<string> &ignored_list);
 
         void VLinkUp(
             string vlink_id);
@@ -168,8 +190,7 @@ namespace tincan
         shared_ptr<ControllerCommsChannel> ctrl_link_;
         unique_ptr<rtc::SSLIdentity> sslid_;
         unique_ptr<rtc::SSLFingerprint> local_fingerprint_;
-        TunnelThreads *threads_;
-        rtc::BasicNetworkManager net_manager_;
+        unique_ptr<rtc::Thread>worker_;
         shared_ptr<TapDev> tdev_;
         shared_ptr<VirtualLink> vlink_;
     };

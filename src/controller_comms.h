@@ -53,7 +53,11 @@ namespace tincan
         ControllerCommsChannel(
             const string &socket_name,
             EpollChannelMsgHandler &msg_handler);
+        ControllerCommsChannel(const ControllerCommsChannel &) = delete;
+        ControllerCommsChannel(ControllerCommsChannel &&) = delete;
         ~ControllerCommsChannel();
+        ControllerCommsChannel &operator=(const ControllerCommsChannel &) = delete;
+        ControllerCommsChannel &operator=(ControllerCommsChannel &&) = delete;
         void QueueWrite(const string msg);
         virtual void WriteNext() override;
         virtual void ReadNext() override;
@@ -64,7 +68,7 @@ namespace tincan
             epfd_ = epoll_fd;
         }
         virtual int FileDesc() override { return fd_; }
-        virtual bool IsGood() override {return FileDesc() != -1;}
+        virtual bool IsGood() override { return FileDesc() != -1; }
         virtual void Close() override;
 
         void ConnectToController();
