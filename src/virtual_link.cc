@@ -29,6 +29,7 @@
 namespace tincan
 {
     extern TincanParameters tp;
+    extern BufferPool bp;
     using namespace rtc;
     VirtualLink::VirtualLink(
         unique_ptr<VlinkDescriptor> vlink_desc,
@@ -207,9 +208,10 @@ namespace tincan
             this, &VirtualLink::OnGatheringState);
     }
 
-    void VirtualLink::Transmit(unique_ptr<Iob> frame)
+    void VirtualLink::Transmit(Iob frame)
     {
-        int status = dtls_transport_->SendPacket(frame->data(), frame->size(), packet_options_, 0);
+        int status = dtls_transport_->SendPacket(frame.data(), frame.size(), packet_options_, 0);
+        bp.put(std::move(frame));
         if (status < 0)
             RTC_LOG(LS_INFO) << "Vlink send failed. ERRNO: " << dtls_transport_->GetError();
     }

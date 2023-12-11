@@ -67,7 +67,7 @@ namespace tincan
                 }
                 return *this;
             }
-            TransmitMsgData &operator=(unique_ptr<Iob> &&rhs)
+            TransmitMsgData &operator=(Iob &&rhs)
             {
                 if (&frm != &rhs)
                 {
@@ -75,7 +75,7 @@ namespace tincan
                 }
                 return *this;
             }
-            unique_ptr<Iob> frm;
+            Iob frm;
         };
 
         class LinkInfoMsgData : public MessageData
@@ -167,7 +167,7 @@ namespace tincan
             size_t data_len);
         //
         void TapReadComplete(
-            Iob *iob);
+            Iob iob);
         // MessageHandler overrides
         void OnMessage(
             Message *msg) override;

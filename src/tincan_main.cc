@@ -26,6 +26,7 @@
 namespace tincan
 {
     TincanParameters tp;
+    BufferPool bp(32);
 }
 using namespace tincan;
 Tincan *Tincan::self_ = NULL;

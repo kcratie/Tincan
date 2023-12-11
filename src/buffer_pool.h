@@ -111,64 +111,51 @@ namespace tincan
         size_t len_ = {0};
     };
 
-    // class BufferPool
-    // {
-    // public:
-    //     ~BufferPool() {
-    //         cout << "BufferPool dtor:" << this << endl;
-    //     }
+class BufferPool
+{
+public:
+	~BufferPool() {
+		RTC_LOG(LS_INFO) << "bufferpool max usage=" << max_used_;
+	}
+	BufferPool() : cap_(2), pool_(cap_)
+	{}
+	BufferPool(size_t capacity) : cap_(capacity), pool_(cap_)
+	{}
+	BufferPool(const BufferPool& rhs) = delete;
+	BufferPool& operator=(const BufferPool& rhs) = delete;
 
-    //     BufferPool(size_t size = 1, size_t capacity = 2) : sz_(size), cap_(capacity)
-    //     {
-    //         cout << "BufferPool ctor:" << this << endl;
-    //         if (sz_ > cap_)
-    //             throw out_of_range("Initial size greater then max capacity");
-    //         pool_ = make_unique<deque<Iob>>(sz_);
-    //     }
-    //     Iob get()
-    //     {
-    //         if (pool_->empty())
-    //         {
-    //             auto ccc = sz_ / 2 +1;
-    //             size_t sz = std::min(ccc, cap_ - sz_);
-    //             extend(sz);
-    //         }
-    //         if (pool_->empty())
-    //             throw std::bad_alloc();
-    //         Iob el = std::move(pool_->front());
-    //         pool_->pop_front();
-    //         return el;
-    //     }
+	Iob get() noexcept
+	{
+		lock_guard<mutex> lg(excl_);
+		max_used_ = std::max(++sz_, max_used_);
+		if (pool_.empty())
+		{
+			return Iob();
+		}
+		Iob el = std::move(pool_.front());
+		pool_.pop_front();
+		return el;
+	}
 
-    //     void put(Iob&& iob)
-    //     {
-    //         if (pool_->size() < cap_)
-    //         {
+	void put(Iob&& iob) noexcept
+	{
+		lock_guard<mutex> lg(excl_);
+		sz_ = sz_ == 0 ? 0 : --sz_;
+		if (pool_.size() < cap_)
+		{
+			iob.size(0);
+			pool_.push_back(std::move(iob));
+		}
+	}
 
-    //             iob.size(0);
-    //             pool_->push_back(std::move(iob));
-    //         }
-    //     }
+	void put(Iob& iob) = delete;
 
-    //     void put(Iob& iob)
-    //     {
-    //         if (pool_->size() >= cap_)
-    //             delete &iob;
-
-    //         iob.size(0);
-    //         pool_->push_back(iob);
-    //     }
-
-    // private:
-    //     void extend(size_t sz)
-    //     {
-    //         for (size_t i = 0; i < sz; i++)
-    //             pool_->emplace_back(Iob());
-    //     }
-    //     size_t sz_;
-    //     size_t cap_;
-    //     unique_ptr<deque<Iob>> pool_;
-    // };
-
+private:
+	size_t sz_ = { 0 };
+	size_t max_used_ = { 0 };
+	size_t cap_;
+	mutex excl_;
+	deque<Iob> pool_;
+};
 } // namespace tincan
 #endif // BUFFER_POOL_H_

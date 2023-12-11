@@ -89,7 +89,7 @@ namespace tincan
 
         bool IsReady();
 
-        void Transmit(unique_ptr<Iob> frame);
+        void Transmit(Iob frame);
 
         string Candidates();
 

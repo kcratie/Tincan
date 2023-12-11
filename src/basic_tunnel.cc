@@ -28,6 +28,7 @@
 namespace tincan
 {
     extern TincanParameters tp;
+    extern BufferPool bp;
     BasicTunnel::BasicTunnel(
         unique_ptr<TunnelDesc> descriptor,
         shared_ptr<ControllerCommsChannel> ctrl_handle) : descriptor_(std::move(descriptor)),
@@ -217,25 +218,26 @@ namespace tincan
         const char *data,
         size_t data_len)
     {
-        auto frame = make_unique<Iob>(data, data_len);
+        auto frame = bp.get();
+        frame.data(data, data_len);
         tdev_->QueueWrite(std::move(frame));
     }
 
     void BasicTunnel::TapReadComplete(
-        Iob *iob)
+        Iob iob)
     {
         if (!vlink_)
         {
             RTC_LOG(LS_ERROR) << "No vlink for transmit";
-            delete iob;
+            bp.put(std::move(iob));
             return;
         }
         if (NetworkThread()->IsCurrent())
-            vlink_->Transmit(unique_ptr<Iob>(iob));
+            vlink_->Transmit(std::move(iob));
         else
         {
             TransmitMsgData *md = new TransmitMsgData;
-            md->frm.reset(iob);
+            md->frm = std::move((iob));
             NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_TRANSMIT, md);
         }
     }

@@ -29,6 +29,7 @@
 namespace tincan
 {
     static const char *const TUN_PATH = "/dev/net/tun";
+    extern BufferPool bp;
 
     TapDev::TapDev() : fd_(-1), is_down_(true), epfd_(-1)
     {
@@ -138,14 +139,14 @@ namespace tincan
     }
     ///////////////////////////////////////////////////////////////////////////
     // EpollChannel interface
-    void TapDev::QueueWrite(unique_ptr<Iob> msg)
+    void TapDev::QueueWrite(Iob msg)
     {
         lock_guard<mutex> lg(sendq_mutex_);
         if (is_down_ || !IsGood())
         {
             return;
         }
-        sendq_.push_back(std::move(*msg.get()));
+        sendq_.push_back(std::move(msg));
         if ((channel_ev->events & EPOLLOUT) == 0)
         {
             channel_ev->events |= EPOLLOUT;
@@ -164,7 +165,7 @@ namespace tincan
             nw = write(fd_, wiob.data(), wiob.size());
             if (nw < 0)
             {
-                RTC_LOG(LS_WARNING) << "TAP write failed";
+                RTC_LOG(LS_WARNING) << "TAP write failed. " << "iob sz:"<<wiob.size() << " " << strerror(errno);
             }
             if ((size_t)nw == wiob.size())
             {
@@ -185,12 +186,12 @@ namespace tincan
     void TapDev::ReadNext()
     {
         ssize_t nr = 0;
-        unique_ptr<Iob> riob = make_unique<Iob>();
-        nr = read(fd_, riob->buf(), riob->capacity());
+        Iob riob = bp.get();
+        nr = read(fd_, riob.buf(), riob.capacity());
         if (nr > 0)
         {
-            riob->size(nr);
-            read_completion_(riob.release());
+            riob.size(nr);
+            read_completion_(std::move(riob));
         }
         else if (nr < 0)
         {
