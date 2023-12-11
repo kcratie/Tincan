@@ -29,7 +29,7 @@
 namespace tincan
 {
     static const char *const TUN_PATH = "/dev/net/tun";
-    extern BufferPool bp;
+    extern BufferPool<Iob> bp;
 
     TapDev::TapDev() : fd_(-1), is_down_(true), epfd_(-1)
     {

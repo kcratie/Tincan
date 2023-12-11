@@ -28,7 +28,7 @@
 namespace tincan
 {
     extern TincanParameters tp;
-    extern BufferPool bp;
+    extern BufferPool<Iob> bp;
     BasicTunnel::BasicTunnel(
         unique_ptr<TunnelDesc> descriptor,
         shared_ptr<ControllerCommsChannel> ctrl_handle) : descriptor_(std::move(descriptor)),

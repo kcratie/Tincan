@@ -29,7 +29,7 @@
 namespace tincan
 {
     extern TincanParameters tp;
-    extern BufferPool bp;
+    extern BufferPool<Iob> bp;
     using namespace rtc;
     VirtualLink::VirtualLink(
         unique_ptr<VlinkDescriptor> vlink_desc,

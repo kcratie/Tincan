@@ -111,33 +111,34 @@ namespace tincan
         size_t len_ = {0};
     };
 
+template<typename Tb>
 class BufferPool
 {
 public:
 	~BufferPool() {
 		RTC_LOG(LS_INFO) << "bufferpool max usage=" << max_used_;
 	}
-	BufferPool() : cap_(2), pool_(cap_)
+	BufferPool() : cap_(64), pool_(cap_)
 	{}
 	BufferPool(size_t capacity) : cap_(capacity), pool_(cap_)
 	{}
 	BufferPool(const BufferPool& rhs) = delete;
 	BufferPool& operator=(const BufferPool& rhs) = delete;
 
-	Iob get() noexcept
+	Tb get() noexcept
 	{
 		lock_guard<mutex> lg(excl_);
 		max_used_ = std::max(++sz_, max_used_);
 		if (pool_.empty())
 		{
-			return Iob();
+			return Tb();
 		}
-		Iob el = std::move(pool_.front());
+		Tb el = std::move(pool_.front());
 		pool_.pop_front();
 		return el;
 	}
 
-	void put(Iob&& iob) noexcept
+	void put(Tb&& iob) noexcept
 	{
 		lock_guard<mutex> lg(excl_);
 		sz_ = sz_ == 0 ? 0 : --sz_;
@@ -148,14 +149,14 @@ public:
 		}
 	}
 
-	void put(Iob& iob) = delete;
+	void put(Tb& iob) = delete;
 
 private:
 	size_t sz_ = { 0 };
 	size_t max_used_ = { 0 };
 	size_t cap_;
 	mutex excl_;
-	deque<Iob> pool_;
+	deque<Tb> pool_;
 };
 } // namespace tincan
 #endif // BUFFER_POOL_H_

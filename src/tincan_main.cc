@@ -20,13 +20,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #define TINCAN_MAIN 1
 #include "tincan_base.h"
 #include "tincan.h"
 namespace tincan
 {
     TincanParameters tp;
-    BufferPool bp(32);
+    BufferPool<Iob> bp(1024);
 }
 using namespace tincan;
 Tincan *Tincan::self_ = NULL;
@@ -46,8 +47,8 @@ int main(int argc, char **argv)
         }
         else if (tp.kNeedsHelp)
         {
-            std::cout << "-v\t\tVersion check." << endl
-                      << "-s SOCKETNAME\t\tThe Unix Domain Socket name" << endl
+            std::cout << "-v\t\tDisplay version number." << endl
+                      << "-s SOCKETNAME\t\tThe controler's Unix Domain Socket name" << endl
                       << "-h\t\tHelp menu" << endl;
         }
         else
