@@ -26,34 +26,35 @@
 #include "rtc_base/logging.h"
 namespace tincan
 {
-    extern TincanParameters tp;
     class Iob
     {
     public:
-        Iob() : iob_(new char[tp.kFrameBufferSz])
+        Iob() : iob_(new char[kFrameBufferSz])
         {
         }
-        Iob(const char *inp, size_t sz) : iob_(new char[tp.kFrameBufferSz])
+        Iob(const char *inp, size_t sz) : iob_(new char[kFrameBufferSz])
         {
             data(inp, sz);
         }
-        Iob(const Iob &rhs) : iob_(new char[tp.kFrameBufferSz])
-        {
-            *this = rhs;
-        }
+        Iob(const Iob &rhs) = delete;
+        // Iob(const Iob &rhs) : iob_(new char[kFrameBufferSz])
+        // {
+        //     *this = rhs;
+        // }
         Iob(Iob &&rhs) noexcept : iob_(nullptr)
         {
             *this = std::move(rhs);
         }
-        Iob &operator=(const Iob &rhs)
-        {
-            if (this != &rhs)
-            {
-                len_ = std::min(capacity(), rhs.size());
-                data(rhs.data(), len_);
-            }
-            return *this;
-        }
+        Iob &operator=(const Iob &rhs) = delete;
+        // Iob &operator=(const Iob &rhs)
+        // {
+        //     if (this != &rhs)
+        //     {
+        //         len_ = std::min(capacity(), rhs.size());
+        //         data(rhs.data(), len_);
+        //     }
+        //     return *this;
+        // }
         Iob &operator=(Iob &&rhs) noexcept
         {
             if (this != &rhs)
@@ -73,18 +74,18 @@ namespace tincan
         size_t size() const noexcept { return len_; }
         void size(size_t sz) noexcept
         {
-            if (sz < 0 || sz > tp.kFrameBufferSz)
+            if (sz < 0 || sz > kFrameBufferSz)
             {
                 RTC_LOG(LS_WARNING) << "Iob Resize out of range" << sz;
                 return;
             }
             len_ = sz;
         }
-        size_t capacity() noexcept { return tp.kFrameBufferSz; }
+        size_t capacity() noexcept { return kFrameBufferSz; }
         char *buf()
         {
             if (!iob_)
-                iob_ = new char[tp.kFrameBufferSz];
+                iob_ = new char[kFrameBufferSz];
             return &iob_[0];
         }
         const char *data() const { return &iob_[0]; }
@@ -92,11 +93,11 @@ namespace tincan
         {
             if (sz > capacity())
             {
-                RTC_LOG(LS_WARNING) << "Data larger than max buffer size" << sz << "/" << tp.kFrameBufferSz;
+                RTC_LOG(LS_WARNING) << "Data larger than max buffer size" << sz << "/" << kFrameBufferSz;
             }
             len_ = std::min(sz, capacity());
             if (!iob_)
-                iob_ = new char[tp.kFrameBufferSz];
+                iob_ = new char[kFrameBufferSz];
             std::copy(inp, inp + len_, buf());
         }
 
@@ -115,9 +116,7 @@ template<typename Tb>
 class BufferPool
 {
 public:
-	~BufferPool() {
-		RTC_LOG(LS_INFO) << "bufferpool max usage=" << max_used_;
-	}
+	~BufferPool() = default;
 	BufferPool() : cap_(64), pool_(cap_)
 	{}
 	BufferPool(size_t capacity) : cap_(capacity), pool_(cap_)
@@ -147,10 +146,12 @@ public:
 			iob.size(0);
 			pool_.push_back(std::move(iob));
 		}
+        else
+            iob.~Iob();
 	}
 
 	void put(Tb& iob) = delete;
-
+    size_t max_used() noexcept {return max_used_;}
 private:
 	size_t sz_ = { 0 };
 	size_t max_used_ = { 0 };

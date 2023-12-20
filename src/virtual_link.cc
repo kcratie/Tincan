@@ -28,7 +28,6 @@
 #include "rtc_base/bind.h"
 namespace tincan
 {
-    extern TincanParameters tp;
     extern BufferPool<Iob> bp;
     using namespace rtc;
     VirtualLink::VirtualLink(
@@ -40,8 +39,6 @@ namespace tincan
                                        local_conn_role_(cricket::CONNECTIONROLE_ACTPASS),
                                        dtls_transport_(nullptr),
                                        packet_options_(DSCP_DEFAULT),
-                                       packet_factory_(network_thread),
-                                       gather_state_(cricket::kIceGatheringNew),
                                        signaling_thread_(signaling_thread),
                                        network_thread_(network_thread),
                                        pa_init_(false)
@@ -55,19 +52,6 @@ namespace tincan
                                   int64_t packet_time_us)
         { RTC_NOTREACHED(); };
         config_.ice_transport_factory = ice_transport_factory_.get();
-        // config_.disable_encryption = true; //! todo: test
-    }
-
-    VirtualLink::~VirtualLink()
-    {
-        if (!network_thread_->IsCurrent())
-        {
-            // port_allocator_ lives on the network thread and should be destroyed there.
-            network_thread_->Invoke<void>(RTC_FROM_HERE, [this]
-                                          {
-      RTC_DCHECK_RUN_ON(network_thread_);
-      port_allocator_.reset(); });
-        }
     }
 
     string VirtualLink::Name()
@@ -115,7 +99,7 @@ namespace tincan
             string candidate_str;
             iss >> candidate_str;
             vector<string> fields;
-            size_t len = rtc::split(candidate_str, tp.kCandidateDelim, &fields);
+            size_t len = rtc::split(candidate_str, kCandidateDelim, &fields);
             rtc::SocketAddress sa;
             if (len >= 10)
             {
@@ -162,7 +146,6 @@ namespace tincan
         const string &,
         const cricket::Candidates &candidates)
     {
-        std::unique_lock<std::mutex> lk(cas_mutex_);
         local_candidates_.insert(local_candidates_.end(), candidates.begin(),
                                  candidates.end());
         return;
@@ -171,7 +154,7 @@ namespace tincan
     void VirtualLink::OnGatheringState(
         cricket::IceGatheringState gather_state)
     {
-        gather_state_ = gather_state;
+        // gather_state_ = gather_state;
         if (cas_ready_id_ && gather_state == cricket::kIceGatheringComplete)
         {
             SignalLocalCasReady(cas_ready_id_, Candidates());
@@ -208,7 +191,7 @@ namespace tincan
             this, &VirtualLink::OnGatheringState);
     }
 
-    void VirtualLink::Transmit(Iob frame)
+    void VirtualLink::Transmit(Iob&& frame)
     {
         int status = dtls_transport_->SendPacket(frame.data(), frame.size(), packet_options_, 0);
         bp.put(std::move(frame));
@@ -222,14 +205,14 @@ namespace tincan
         for (auto &cnd : local_candidates_)
         {
             oss << cnd.component()
-                << tp.kCandidateDelim << cnd.protocol()
-                << tp.kCandidateDelim << cnd.address().ToString()
-                << tp.kCandidateDelim << cnd.priority()
-                << tp.kCandidateDelim << cnd.username()
-                << tp.kCandidateDelim << cnd.password()
-                << tp.kCandidateDelim << cnd.type()
-                << tp.kCandidateDelim << cnd.generation()
-                << tp.kCandidateDelim << cnd.foundation()
+                << kCandidateDelim << cnd.protocol()
+                << kCandidateDelim << cnd.address().ToString()
+                << kCandidateDelim << cnd.priority()
+                << kCandidateDelim << cnd.username()
+                << kCandidateDelim << cnd.password()
+                << kCandidateDelim << cnd.type()
+                << kCandidateDelim << cnd.generation()
+                << kCandidateDelim << cnd.foundation()
                 << " ";
         }
         return oss.str();
@@ -323,11 +306,11 @@ namespace tincan
         }
 
         cricket::TransportDescription local_transport_desc(
-            vector<string>(), tp.kIceUfrag, tp.kIcePwd,
+            vector<string>(), kIceUfrag, kIcePwd,
             cricket::ICEMODE_FULL, local_conn_role_, local_fingerprint.get());
 
         cricket::TransportDescription remote_transport_desc(
-            vector<string>(), tp.kIceUfrag, tp.kIcePwd,
+            vector<string>(), kIceUfrag, kIcePwd,
             cricket::ICEMODE_FULL, remote_conn_role, remote_fingerprint_.get());
 
         cricket::ContentGroup bundle_group(cricket::GROUP_TYPE_BUNDLE);
@@ -417,11 +400,6 @@ namespace tincan
     void
     VirtualLink::StartConnections()
     {
-        if (!network_thread_->IsCurrent())
-        {
-            return network_thread_->Invoke<void>(
-                RTC_FROM_HERE, rtc::Bind(&VirtualLink::StartConnections, this));
-        }
         if (!pa_init_)
             InitializePortAllocator();
         if (peer_desc_->cas.length() != 0)

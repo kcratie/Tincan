@@ -33,86 +33,9 @@
 #include "controller_comms.h"
 namespace tincan
 {
-    class BasicTunnel : public sigslot::has_slots<>,
-                        public MessageHandler
+    class BasicTunnel : public sigslot::has_slots<>
     {
     public:
-        enum MSG_ID
-        {
-            MSGID_TRANSMIT,
-            MSGID_SEND_ICC,
-            MSGID_QUERY_NODE_INFO,
-            MSGID_FWD_FRAME,
-            MSGID_FWD_FRAME_RD,
-            MSGID_DISC_LINK,
-            MSGID_TAP_READ,
-            MSGID_TAP_WRITE,
-            MSGID_TAP_UP,
-            MSGID_TAP_DOWN
-        };
-
-        class TransmitMsgData : public MessageData
-        {
-        public:
-            TransmitMsgData()=default;
-            TransmitMsgData(const TransmitMsgData &rhs) = delete;
-            TransmitMsgData(TransmitMsgData &&rhs) : frm(std::move(rhs.frm)) {}
-            virtual ~TransmitMsgData() = default;
-            TransmitMsgData &operator=(const TransmitMsgData &rhs) = delete;
-            TransmitMsgData &operator=(TransmitMsgData &&rhs)
-            {
-                if (this != &rhs)
-                {
-                    frm = std::move(rhs.frm);
-                }
-                return *this;
-            }
-            TransmitMsgData &operator=(Iob &&rhs)
-            {
-                if (&frm != &rhs)
-                {
-                    frm = std::move(rhs);
-                }
-                return *this;
-            }
-            Iob frm;
-        };
-
-        class LinkInfoMsgData : public MessageData
-        {
-        public:
-            shared_ptr<VirtualLink> vl;
-            Json::Value *info;
-            rtc::Event *msg_event;
-            LinkInfoMsgData() : info(new Json::Value(Json::arrayValue)), msg_event(new rtc::Event(false, false)) {}
-            LinkInfoMsgData(const LinkInfoMsgData &rhs)=delete;
-            LinkInfoMsgData(LinkInfoMsgData &&rhs):vl(rhs.vl), info(rhs.info), msg_event(rhs.msg_event)
-            {
-                rhs.vl.reset();
-                rhs.info = nullptr;
-                rhs.msg_event=nullptr;
-            }
-            LinkInfoMsgData &operator=(const LinkInfoMsgData&)=delete;
-            LinkInfoMsgData &operator=(LinkInfoMsgData &rhs)
-            {
-                if( this != &rhs)
-                {
-                    vl = rhs.vl;
-                    rhs.vl.reset();
-                    info = rhs.info;
-                    rhs.info = nullptr;
-                    msg_event = rhs.msg_event;
-                    rhs.msg_event=nullptr;
-                }
-                return *this;
-            }  
-            virtual ~LinkInfoMsgData()
-            {
-                delete info;
-                delete msg_event;
-            }
-        };
-
         BasicTunnel()=delete;
         BasicTunnel(
             unique_ptr<TunnelDesc> descriptor,
@@ -126,7 +49,7 @@ namespace tincan
         int Configure(
             unique_ptr<TapDescriptor> tap_desc);
 
-        shared_ptr<VirtualLink> CreateVlink(
+        VirtualLink* CreateVlink(
             unique_ptr<PeerDescriptor> peer_desc, bool role,
             const vector<string> &ignored_list);
 
@@ -152,34 +75,27 @@ namespace tincan
             Json::Value &vlink_info);
 
         void QueryLinkCas(
-            const string &vlink_id,
             Json::Value &cas_info);
-
-        void Shutdown();
 
         void Start();
 
-        int RemoveLink(
-            const string &vlink_id);
+        void RemoveLink();
         //
         void VlinkReadComplete(
             const char *data,
             size_t data_len);
         //
         void TapReadComplete(
-            Iob iob);
-        // MessageHandler overrides
-        void OnMessage(
-            Message *msg) override;
+            Iob&& iob);
 
-        shared_ptr<VirtualLink> Vlink() { return vlink_; }
+        VirtualLink* Vlink() { return vlink_.get(); }
 
     private:
 
-        void VLinkUp(
+        void OnVLinkUp(
             string vlink_id);
 
-        void VLinkDown(
+        void OnVLinkDown(
             string vlink_id);
 
         rtc::Thread *SignalThread();
@@ -192,7 +108,7 @@ namespace tincan
         unique_ptr<rtc::SSLFingerprint> local_fingerprint_;
         unique_ptr<rtc::Thread>worker_;
         shared_ptr<TapDev> tdev_;
-        shared_ptr<VirtualLink> vlink_;
+        unique_ptr<VirtualLink> vlink_;
     };
 } // namespace tincan
 #endif // BASIC_TUNNEL_H_

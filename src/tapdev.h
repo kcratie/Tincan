@@ -57,16 +57,16 @@ namespace tincan
         ~TapDev() override;
         TapDev &operator=(const TapDev &) = delete;
         TapDev &operator=(TapDev &&) = delete;
-        sigslot::signal1<Iob> read_completion_;
         int Open(
             const TapDescriptor &tap_desc);
         uint16_t Mtu();
         void Up();
         void Down();
         MacAddressType MacAddress();
+        std::function<void(Iob&&)>read_completion;
 
         //////////////////////////////////////////////////
-        void QueueWrite(Iob msg);
+        void QueueWrite(Iob&& msg);
         virtual void WriteNext() override;
         virtual void ReadNext() override;
         virtual epoll_event &ChannelEvent() override { return *channel_ev.get(); }

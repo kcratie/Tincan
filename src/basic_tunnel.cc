@@ -27,7 +27,6 @@
 
 namespace tincan
 {
-    extern TincanParameters tp;
     extern BufferPool<Iob> bp;
     BasicTunnel::BasicTunnel(
         unique_ptr<TunnelDesc> descriptor,
@@ -38,9 +37,13 @@ namespace tincan
     {
     }
 
-    BasicTunnel::~BasicTunnel() 
+    BasicTunnel::~BasicTunnel()
     {
-        Shutdown();
+        if (vlink_)
+        {
+            NetworkThread()->Invoke<void>(RTC_FROM_HERE, [this]()
+                                          {vlink_->Disconnect(); vlink_.reset(); });
+        }
     }
 
     int BasicTunnel::Configure(
@@ -69,18 +72,8 @@ namespace tincan
 
     void BasicTunnel::Start()
     {
-        tdev_->read_completion_.connect(this, &BasicTunnel::TapReadComplete);
-    }
-
-    void BasicTunnel::Shutdown()
-    {
-        if (vlink_ && vlink_->IsReady())
-        {
-            LinkInfoMsgData md;
-            NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_DISC_LINK, &md);
-            md.msg_event->Wait(Event::kForever);
-        }
-        NetworkThread()->Stop();
+        tdev_->read_completion = [this](Iob &&iob)
+        { TapReadComplete(std::move(iob)); };
     }
 
     rtc::Thread *BasicTunnel::SignalThread()
@@ -93,7 +86,7 @@ namespace tincan
         return worker_.get();
     }
 
-    shared_ptr<VirtualLink>
+    VirtualLink *
     BasicTunnel::CreateVlink(
         unique_ptr<PeerDescriptor> peer_desc, bool role, const vector<string> &ignored_list)
     {
@@ -108,26 +101,31 @@ namespace tincan
                                           descriptor_->turn_descs.end());
             NetworkThread()->SetName("NetworkThread", this);
             NetworkThread()->Start();
-            unique_ptr<VirtualLink> vl = make_unique<VirtualLink>(
+            vlink_ = make_unique<VirtualLink>(
                 std::move(vlink_desc), std::move(peer_desc), SignalThread(), NetworkThread());
             unique_ptr<SSLIdentity> sslid_copy(sslid_->Clone());
-            vl->Initialize(std::move(sslid_copy),
-                           make_unique<rtc::SSLFingerprint>(*local_fingerprint_.get()),
-                           role ? cricket::ICEROLE_CONTROLLED : cricket::ICEROLE_CONTROLLING,
-                           ignored_list);
-            vl->SignalMessageReceived.connect(this, &BasicTunnel::VlinkReadComplete);
-            vl->SignalLinkUp.connect(this, &BasicTunnel::VLinkUp);
-            vl->SignalLinkDown.connect(this, &BasicTunnel::VLinkDown);
-            vlink_ = std::move(vl);
+            vlink_->Initialize(std::move(sslid_copy),
+                               make_unique<rtc::SSLFingerprint>(*local_fingerprint_.get()),
+                               role ? cricket::ICEROLE_CONTROLLED : cricket::ICEROLE_CONTROLLING,
+                               ignored_list);
+            vlink_->SignalMessageReceived.connect(this, &BasicTunnel::VlinkReadComplete);
+            vlink_->SignalLinkUp.connect(this, &BasicTunnel::OnVLinkUp);
+            vlink_->SignalLinkDown.connect(this, &BasicTunnel::OnVLinkDown);
         }
-        return vlink_;
+        return vlink_.get();
     }
 
     void BasicTunnel::StartConnections()
     {
-        vlink_->StartConnections();
+        if (NetworkThread()->IsCurrent())
+            vlink_->StartConnections();
+        else
+        {
+            NetworkThread()->PostTask(RTC_FROM_HERE, [this]() mutable
+                                      { vlink_->StartConnections(); });
+        }
     }
-    
+
     void BasicTunnel::QueryInfo(
         Json::Value &tnl_info)
     {
@@ -143,7 +141,6 @@ namespace tincan
     }
 
     void BasicTunnel::QueryLinkCas(
-        const string &vlink_id,
         Json::Value &cas_info)
     {
         if (vlink_)
@@ -166,19 +163,17 @@ namespace tincan
     void BasicTunnel::QueryLinkInfo(
         Json::Value &vlink_info)
     {
-        vlink_info[TincanControl::LinkId] = vlink_->Id();
         if (vlink_)
         {
+            vlink_info[TincanControl::LinkId] = vlink_->Id();
             if (vlink_->IceRole() == cricket::ICEROLE_CONTROLLING)
                 vlink_info[TincanControl::IceRole] = TincanControl::Controlling;
             else
                 vlink_info[TincanControl::IceRole] = TincanControl::Controlled;
             if (vlink_->IsReady())
             {
-                LinkInfoMsgData md;
-                NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_QUERY_NODE_INFO, &md);
-                md.msg_event->Wait(Event::kForever);
-                vlink_info[TincanControl::Stats].swap(*md.info);
+                NetworkThread()->Invoke<void>(RTC_FROM_HERE, [this, &info = vlink_info[TincanControl::Stats]]()
+                                              { vlink_->GetStats(info); });
                 vlink_info[TincanControl::Status] = "ONLINE";
             }
             else
@@ -194,24 +189,13 @@ namespace tincan
         }
     }
 
-    int BasicTunnel::RemoveLink(
-        const string &vlink_id)
+    void BasicTunnel::RemoveLink()
     {
-        if (!vlink_)
-            return 0;
-        if (vlink_->Id() != vlink_id)
+        if (vlink_)
         {
-            RTC_LOG(LS_ERROR) << "The specified VLink ID does not match this Tunnel";
-            return -1;
+            NetworkThread()->Invoke<void>(RTC_FROM_HERE, [this]()
+                                          { vlink_->Disconnect(); vlink_.reset(); });
         }
-        if (vlink_->IsReady())
-        {
-            LinkInfoMsgData md;
-            NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_DISC_LINK, &md);
-            md.msg_event->Wait(Event::kForever);
-        }
-        vlink_.reset();
-        return 0;
     }
 
     void BasicTunnel::VlinkReadComplete(
@@ -224,7 +208,7 @@ namespace tincan
     }
 
     void BasicTunnel::TapReadComplete(
-        Iob iob)
+        Iob &&iob)
     {
         if (!vlink_)
         {
@@ -236,14 +220,13 @@ namespace tincan
             vlink_->Transmit(std::move(iob));
         else
         {
-            TransmitMsgData *md = new TransmitMsgData;
-            md->frm = std::move((iob));
-            NetworkThread()->Post(RTC_FROM_HERE, this, MSGID_TRANSMIT, md);
+            NetworkThread()->PostTask(RTC_FROM_HERE, [this, riob = std::move(iob)]() mutable
+                                      { vlink_->Transmit(std::move(riob)); });
         }
     }
 
     void
-    BasicTunnel::VLinkUp(
+    BasicTunnel::OnVLinkUp(
         string vlink_id)
     {
         tdev_->Up();
@@ -257,7 +240,7 @@ namespace tincan
     }
 
     void
-    BasicTunnel::VLinkDown(
+    BasicTunnel::OnVLinkDown(
         string vlink_id)
     {
         unique_ptr<TincanControl> ctrl = make_unique<TincanControl>();
@@ -292,35 +275,6 @@ namespace tincan
     BasicTunnel::Fingerprint()
     {
         return local_fingerprint_->ToString();
-    }
-
-
-    void BasicTunnel::OnMessage(Message *msg)
-    {
-        switch (msg->message_id)
-        {
-        case MSGID_TRANSMIT:
-        {
-            if (vlink_)
-                vlink_->Transmit(std::move(((TransmitMsgData *)msg->pdata)->frm));
-        }
-        break;
-        case MSGID_QUERY_NODE_INFO:
-        {
-            if (vlink_)
-                vlink_->GetStats(*((LinkInfoMsgData *)msg->pdata)->info);
-            ((LinkInfoMsgData *)msg->pdata)->msg_event->Set();
-        }
-        break;
-        case MSGID_DISC_LINK:
-        {
-            if (vlink_)
-                vlink_->Disconnect();
-            ((LinkInfoMsgData *)msg->pdata)->msg_event->Set();
-        }
-        break;
-        }
-        // msg is deleted elsewhere
     }
 
 } // namespace tincan

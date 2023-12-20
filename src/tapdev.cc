@@ -139,7 +139,7 @@ namespace tincan
     }
     ///////////////////////////////////////////////////////////////////////////
     // EpollChannel interface
-    void TapDev::QueueWrite(Iob msg)
+    void TapDev::QueueWrite(Iob&& msg)
     {
         lock_guard<mutex> lg(sendq_mutex_);
         if (is_down_ || !IsGood())
@@ -191,7 +191,7 @@ namespace tincan
         if (nr > 0)
         {
             riob.size(nr);
-            read_completion_(std::move(riob));
+            read_completion(std::move(riob));
         }
         else if (nr < 0)
         {

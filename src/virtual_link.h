@@ -68,7 +68,6 @@ namespace tincan
             unique_ptr<PeerDescriptor> peer_desc,
             rtc::Thread *signaling_thread,
             rtc::Thread *network_thread);
-        ~VirtualLink();
 
         string Name();
 
@@ -89,7 +88,7 @@ namespace tincan
 
         bool IsReady();
 
-        void Transmit(Iob frame);
+        void Transmit(Iob&& frame);
 
         string Candidates();
 
@@ -108,10 +107,6 @@ namespace tincan
             return ice_role_;
         }
 
-        bool IsGatheringComplete()
-        {
-            return gather_state_ == cricket::kIceGatheringComplete;
-        }
 
         bool InitializePortAllocator();
 
@@ -167,10 +162,11 @@ namespace tincan
             PacketTransportInternal *transport,
             const SentPacket &packet);
 
-        rtc::BasicNetworkManager net_manager_;
+        static const char kCandidateDelim = ':';
+        const string kIceUfrag = {"+001EVIOICEUFRAG"};
+        const string kIcePwd = {"+00000001EVIOICEPASSWORD"};
         unique_ptr<VlinkDescriptor> vlink_desc_;
         unique_ptr<PeerDescriptor> peer_desc_;
-        std::mutex cas_mutex_;
         cricket::Candidates local_candidates_;
         cricket::IceRole ice_role_;
         ConnectionRole local_conn_role_;
@@ -179,17 +175,16 @@ namespace tincan
         unique_ptr<cricket::SessionDescription> remote_description_;
         unique_ptr<SSLFingerprint> remote_fingerprint_;
         string content_name_;
-        PacketOptions packet_options_;
-        BasicPacketSocketFactory packet_factory_;
-        unique_ptr<cricket::PortAllocator> port_allocator_;
-        unique_ptr<JsepTransportController> transport_ctlr_;
-        unique_ptr<webrtc::IceTransportFactory> ice_transport_factory_;
+        const PacketOptions packet_options_;
         JsepTransportController::Config config_;
-        cricket::IceGatheringState gather_state_;
         rtc::Thread *signaling_thread_;
         rtc::Thread *network_thread_;
         uint64_t cas_ready_id_;
         bool pa_init_;
+        rtc::BasicNetworkManager net_manager_;
+        unique_ptr<cricket::PortAllocator> port_allocator_;
+        unique_ptr<webrtc::IceTransportFactory> ice_transport_factory_;
+        unique_ptr<JsepTransportController> transport_ctlr_;
     };
 } // namespace tincan
 #endif // !TINCAN_VIRTUAL_LINK_H_

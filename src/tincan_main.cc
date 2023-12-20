@@ -25,19 +25,26 @@
 #include "tincan_base.h"
 #include "tincan.h"
 namespace tincan
-{
-    TincanParameters tp;
+{    
     BufferPool<Iob> bp(1024);
 }
 using namespace tincan;
-Tincan *Tincan::self_ = NULL;
+std::atomic_bool Tincan::exit_flag_;
 
 int main(int argc, char **argv)
 {
     int rv = 0;
     try
     {
-        tp.SetCliOpts(argc, argv);
+        auto const tp = [](int &argc, char **argv) mutable
+        {
+            InputParser cli(argc, argv);
+            return TincanParameters(cli.getCmdOption("-s"),
+                                    cli.getCmdOption("-l"),
+                                    cli.getCmdOption("-t"),
+                                    cli.cmdOptionExists("-v"),
+                                    cli.cmdOptionExists("-h"));
+        }(argc, argv);
         if (tp.kVersionCheck)
         {
             cout << kTincanVerMjr << "."
@@ -53,7 +60,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            Tincan tc;
+            Tincan tc(tp);
             tc.Run();
         }
     }

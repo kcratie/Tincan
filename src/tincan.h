@@ -36,16 +36,17 @@ namespace tincan
                    public sigslot::has_slots<>
     {
     public:
-        Tincan();
-        Tincan(Tincan &) = delete;
+        Tincan(const TincanParameters &tp);
+        Tincan(const Tincan &) = delete;
         ~Tincan() = default;
         Tincan &operator=(Tincan &) = delete;
-
-        bool CreateVlink(TincanControl &control);
 
         void CreateTunnel(
             const Json::Value &tnl_desc,
             Json::Value &tnl_info);
+
+        bool CreateVlink(
+            TincanControl &control);
 
         void QueryLinkStats(
             Json::Value &stat_info);
@@ -71,32 +72,31 @@ namespace tincan
 
     private:
         void OnStop();
-        void Shutdown();
         void RegisterDataplane();
         static void onStopHandler(int signum);
         static void generate_core(int signum);
         // Dispatch Interface
         using TCDSIP = void (Tincan::*)(TincanControl &);
-        void ConfigureLogging(TincanControl &control);
-        void CreateLink(TincanControl &control);
         void CreateTunnel(TincanControl &control);
-        void Echo(TincanControl &control);
-        void QueryLinkStats(TincanControl &control);
+        void CreateLink(TincanControl &control);
         void QueryTunnelInfo(TincanControl &control);
+        void QueryLinkStats(TincanControl &control);
+        void Echo(TincanControl &control);
         void QueryCandidateAddressSet(TincanControl &control);
         void RemoveLink(TincanControl &control);
+        void ConfigureLogging(TincanControl &control);
         //
-        bool exit_flag_;
-        EpollEngine epoll_eng_;
+        const TincanParameters &tp_;
+        static std::atomic_bool exit_flag_;
         unordered_map<string, TCDSIP> dispatch_map_;
         unordered_map<string, LoggingSeverity> log_levels_;
-        shared_ptr<ControllerCommsChannel> channel_;
         unique_ptr<FileRotatingLogSink> log_sink_;
+        EpollEngine epoll_eng_;
+        shared_ptr<ControllerCommsChannel> channel_;
         std::mutex inprogess_controls_mutex_;
         unordered_map<uint64_t, unique_ptr<TincanControl>> inprogess_controls_;
         vector<string> if_list_;
         unique_ptr<BasicTunnel> tunnel_;
-        static Tincan *self_;
     };
 } // namespace tincan
 #endif // TINCAN_TINCAN_H_
