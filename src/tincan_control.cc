@@ -25,7 +25,6 @@
 #include "tincan_exception.h"
 namespace tincan
 {
-    extern TincanParameters tp;
     const Json::StaticString TincanControl::Command("Command");
     const Json::StaticString TincanControl::CAS("CAS");
     const Json::StaticString TincanControl::ControlType("ControlType");
@@ -110,7 +109,8 @@ namespace tincan
     {
         // create Json from full request
         Json::CharReaderBuilder b;
-        Json::CharReader *parser = b.newCharReader();
+        unique_ptr<Json::CharReader> parser; 
+        parser.reset(b.newCharReader());
         Json::String errs;
         Json::Value ctrl(Json::objectValue);
         if (!parser->parse(req_data, req_data + len, &ctrl, &errs))
