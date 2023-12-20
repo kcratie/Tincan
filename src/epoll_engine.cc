@@ -88,7 +88,7 @@ namespace tincan
         int num_fd = epoll_wait(epoll_fd_, &ev, 1, -1);
         if (exit_flag_)
             return;
-        if (num_fd < 0)
+        if (num_fd < 0 && errno != EINTR)
             throw TCEXCEPT("Epoll wait failure");
 
         while (num_fd-- > 0)
