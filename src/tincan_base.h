@@ -110,46 +110,21 @@ namespace tincan
     struct TincanParameters
     {
     public:
-        TincanParameters()
-            : kVersionCheck(false), kNeedsHelp(false)
+        TincanParameters(const string &socket_name,
+                         const string &log_config,
+                         const string &tunnel_id,
+                         const bool verchk,
+                         bool needs_help) : socket_name(socket_name), tunnel_id(tunnel_id), log_config(log_config), kVersionCheck(verchk), kNeedsHelp(needs_help || socket_name.empty() || tunnel_id.empty())
         {
         }
-        void SetCliOpts(
-            int argc,
-            char **argv)
-        {
-            InputParser cli(argc, argv);
-            if (cli.cmdOptionExists("-h"))
-            {
-                kNeedsHelp = true;
-                return;
-            }
-            if (cli.cmdOptionExists("-v"))
-            {
-                kVersionCheck = true;
-                return;
-            }
-            socket_name = cli.getCmdOption("-s");
-            if (socket_name.empty())
-            {
-                kNeedsHelp = true;
-            }
-
-            log_config = cli.getCmdOption("-l");
-            tunnel_id = cli.getCmdOption("-t");
-        }
-        static const uint16_t kFrameBufferSz = 1500;
-        static const uint16_t kTincanMaxMtuSz = 1410;
-        static const char kCandidateDelim = ':';
-        const char *const kIceUfrag = "+001EVIOICEUFRAG";
-        const char *const kIcePwd = "+00000001EVIOICEPASSWORD";
-        bool kVersionCheck;
-        bool kNeedsHelp;
-        string socket_name;
-        string tunnel_id;
-        string log_config;
+        const string socket_name;
+        const string tunnel_id;
+        const string log_config;
+        const bool kVersionCheck;
+        const bool kNeedsHelp;
     };
     ///////////////////////////////////////////////////////////////////////////////
+    static const uint16_t kFrameBufferSz = 1500;
     template <typename InputIter>
     string ByteArrayToString(
         InputIter first,
@@ -174,29 +149,6 @@ namespace tincan
                 oss << endl;
         }
         return oss.str();
-    }
-    // Fixme: Doesn't handle line breaks
-    template <typename OutputIter>
-    size_t StringToByteArray(
-        const string &src,
-        OutputIter first,
-        OutputIter last,
-        bool sep_present = false)
-    {
-        assert(sizeof(*first) == 1);
-        size_t count = 0;
-        istringstream iss(src);
-        char val[3];
-        while (first != last && iss.peek() != std::istringstream::traits_type::eof())
-        {
-            size_t nb = 0;
-            iss.get(val, 3);
-            (*first++) = (uint8_t)std::stoi(val, &nb, 16);
-            count++;
-            if (sep_present)
-                iss.get();
-        }
-        return count;
     }
 
     template <typename T> // declaration only for TD;
