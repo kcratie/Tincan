@@ -366,8 +366,13 @@ namespace tincan
         {
             vlink->PeerCandidates(
                 link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString());
+    
+            (*resp)[TincanControl::Message][TincanControl::CAS] = vlink->Candidates();
+            (*resp)[TincanControl::Success] = true;
+            control.SetResponse(std::move(resp));
+            return true;
         }
-        return false;
+        return false; //the resp will be sent when the local CAS is generated
     }
 
     void
