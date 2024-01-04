@@ -35,7 +35,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#include <tincan_base.h>
+#include "tincan_base.h"
 #include "tincan_control.h"
 #include "rtc_base/logging.h"
 
@@ -76,9 +76,9 @@ namespace tincan
     class EpollEngine : virtual public EpollEngBase
     {
     private:
-        static const std::array<int, 5> sig_codes;
+        size_t num_poll_events_ = 1;
         int epoll_fd_;
-        bool exit_flag_;
+        atomic_bool exit_flag_;
         unordered_map<int, shared_ptr<EpollChannel>> comm_channels_;
         bool HandleSignal_();
         void HandleRead_(int fd);
@@ -88,10 +88,10 @@ namespace tincan
     public:
         EpollEngine();
         EpollEngine(const EpollEngine &) = delete;
-        EpollEngine(EpollEngine &&) = default;
+        EpollEngine(EpollEngine &&) = delete;
         ~EpollEngine();
-        EpollEngine& operator=(const EpollEngine &) = delete;
-        EpollEngine& operator=(EpollEngine &&) = default;
+        EpollEngine &operator=(const EpollEngine &) = delete;
+        EpollEngine &operator=(EpollEngine &&) = delete;
         void Register(shared_ptr<EpollChannel>, int events);
         void Deregister(int fd);
         void Epoll();

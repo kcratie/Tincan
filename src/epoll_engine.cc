@@ -55,6 +55,7 @@ namespace tincan
         }
         ch->SetChannelEvent(move(ev), epoll_fd_);
         comm_channels_[ch->FileDesc()] = ch;
+        num_poll_events_ = comm_channels_.size();
     }
 
     void EpollEngine::Deregister(int fd)
@@ -69,6 +70,7 @@ namespace tincan
             RTC_LOG(LS_WARNING) << "Error: epoll_ctl_del failed. epoll_fd:" << epoll_fd_ << " fd:" << fd;
         }
         comm_channels_.erase(fd);
+        num_poll_events_ = comm_channels_.size();
     }
 
     void EpollEngine::HandleWrite_(int fd)
@@ -84,40 +86,40 @@ namespace tincan
 
     void EpollEngine::Epoll()
     {
-        struct epoll_event ev;
-        int num_fd = epoll_wait(epoll_fd_, &ev, 1, -1);
-        if (exit_flag_)
+        struct epoll_event ev[num_poll_events_];
+        int num_fd = epoll_wait(epoll_fd_, ev, num_poll_events_, -1);
+        if (exit_flag_.load(std::memory_order_acquire))
             return;
         if (num_fd < 0 && errno != EINTR)
             throw TCEXCEPT("Epoll wait failure");
 
-        while (num_fd-- > 0)
+        while (--num_fd >= 0)
         {
-            if (ev.events & EPOLLIN)
+            if (ev[num_fd].events & EPOLLIN)
             {
-                HandleRead_(ev.data.fd);
+                HandleRead_(ev[num_fd].data.fd);
             }
-            else if (ev.events & EPOLLOUT)
+            else if (ev[num_fd].events & EPOLLOUT)
             {
-                HandleWrite_(ev.data.fd);
+                HandleWrite_(ev[num_fd].data.fd);
             }
-            else if (ev.events & EPOLLRDHUP)
+            else if (ev[num_fd].events & EPOLLRDHUP)
             {
-                auto ch = comm_channels_.at(ev.data.fd);
+                auto ch = comm_channels_.at(ev[num_fd].data.fd);
                 DisableEpollIn(ch->ChannelEvent());
             }
-            else if (ev.events & EPOLLHUP)
+            else if (ev[num_fd].events & EPOLLHUP)
             {
-                auto ch = comm_channels_.at(ev.data.fd);
+                auto ch = comm_channels_.at(ev[num_fd].data.fd);
                 ch->Close();
-                Deregister(ev.data.fd);
+                Deregister(ev[num_fd].data.fd);
             }
         }
     }
 
     void EpollEngine::Shutdown()
     {
-        exit_flag_ = true;
+        exit_flag_.store(true);
         if (epoll_fd_ == -1)
             return;
         for (const auto &i : comm_channels_)
