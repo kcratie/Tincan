@@ -25,12 +25,11 @@
 #include "tincan_base.h"
 #include "tincan.h"
 namespace tincan
-{    
-    BufferPool<Iob> bp(1024);
+{
+    BufferPool<Iob> bp;
 }
 using namespace tincan;
-std::atomic_bool Tincan::exit_flag_;
-
+atomic_bool Tincan::exit_flag_(false);
 int main(int argc, char **argv)
 {
     int rv = 0;

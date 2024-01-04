@@ -29,6 +29,7 @@ namespace tincan
     class Iob
     {
     public:
+        static const uint16_t kFrameBufferSz = 1500;
         Iob() : iob_(new char[kFrameBufferSz])
         {
         }
@@ -116,8 +117,9 @@ template<typename Tb>
 class BufferPool
 {
 public:
+    static const uint16_t kPoolCapacity = 256;
 	~BufferPool() = default;
-	BufferPool() : cap_(64), pool_(cap_)
+	BufferPool() : cap_(kPoolCapacity), pool_(cap_)
 	{}
 	BufferPool(size_t capacity) : cap_(capacity), pool_(cap_)
 	{}
@@ -130,6 +132,7 @@ public:
 		max_used_ = std::max(++sz_, max_used_);
 		if (pool_.empty())
 		{
+            yield();
 			return Tb();
 		}
 		Tb el = std::move(pool_.front());

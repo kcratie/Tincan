@@ -29,6 +29,7 @@
 
 namespace tincan
 {
+    extern BufferPool<Iob> bp;
     Tincan::Tincan(const TincanParameters &tp) : tp_(tp),
                                                  dispatch_map_{
                                                      {"ConfigureLogging", &Tincan::ConfigureLogging},
@@ -50,7 +51,6 @@ namespace tincan
                                                  },
                                                  channel_{make_shared<ControllerCommsChannel>(tp.socket_name, *this)}
     {
-        exit_flag_.store(false);
         LogMessage::LogTimestamps();
         LogMessage::LogThreads();
         LogMessage::LogToDebug(LS_WARNING);
@@ -296,7 +296,6 @@ namespace tincan
         }
     }
 
-    
     ////////////////////////////////////////////////////////////////////////////
 
     void Tincan::CreateTunnel(
@@ -340,7 +339,8 @@ namespace tincan
         {
             tunnel_->QueryInfo(tnl_info);
         }
-        VirtualLink *vlink = tunnel_->Vlink();
+        auto vl = tunnel_->Vlink();
+        auto vlink = vl.lock();
         if (!vlink)
         {
             unique_ptr<PeerDescriptor> peer_desc = make_unique<PeerDescriptor>();
@@ -352,7 +352,8 @@ namespace tincan
                 link_desc[TincanControl::PeerInfo][TincanControl::FPR].asString();
             peer_desc->mac_address =
                 link_desc[TincanControl::PeerInfo][TincanControl::MAC].asString();
-            vlink = tunnel_->CreateVlink(std::move(peer_desc), role, if_list_);
+            vl = tunnel_->CreateVlink(std::move(peer_desc), role, if_list_);
+            vlink = vl.lock();
             if_list_.clear();
             vlink->SignalLocalCasReady.connect(this, &Tincan::OnLocalCasUpdated);
             unique_ptr<TincanControl> ctrl = make_unique<TincanControl>(control);
@@ -366,13 +367,13 @@ namespace tincan
         {
             vlink->PeerCandidates(
                 link_desc[TincanControl::PeerInfo][TincanControl::CAS].asString());
-    
+
             (*resp)[TincanControl::Message][TincanControl::CAS] = vlink->Candidates();
             (*resp)[TincanControl::Success] = true;
             control.SetResponse(std::move(resp));
             return true;
         }
-        return false; //the resp will be sent when the local CAS is generated
+        return false; // the resp will be sent when the local CAS is generated
     }
 
     void
@@ -487,7 +488,9 @@ namespace tincan
         }
         epoll_eng_.Shutdown();
         tunnel_.reset();
-        RTC_LOG(LS_INFO) << "Tincan shutdown completed";
+        RTC_LOG(LS_INFO) << "Max iobs used= " << bp.max_used();
+        RTC_LOG(LS_INFO) << "Tincan shutdown completed.";
+                         
     }
 
     /*

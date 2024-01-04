@@ -87,13 +87,13 @@ namespace tincan
         void ConfigureLogging(TincanControl &control);
         //
         const TincanParameters &tp_;
-        static std::atomic_bool exit_flag_;
+        static atomic_bool exit_flag_;
         unordered_map<string, TCDSIP> dispatch_map_;
         unordered_map<string, LoggingSeverity> log_levels_;
         unique_ptr<FileRotatingLogSink> log_sink_;
         EpollEngine epoll_eng_;
         shared_ptr<ControllerCommsChannel> channel_;
-        std::mutex inprogess_controls_mutex_;
+        mutex inprogess_controls_mutex_;
         unordered_map<uint64_t, unique_ptr<TincanControl>> inprogess_controls_;
         vector<string> if_list_;
         unique_ptr<BasicTunnel> tunnel_;

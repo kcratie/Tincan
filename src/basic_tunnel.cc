@@ -86,7 +86,7 @@ namespace tincan
         return worker_.get();
     }
 
-    VirtualLink *
+    weak_ptr<VirtualLink>
     BasicTunnel::CreateVlink(
         unique_ptr<PeerDescriptor> peer_desc, bool role, const vector<string> &ignored_list)
     {
@@ -112,7 +112,7 @@ namespace tincan
             vlink_->SignalLinkUp.connect(this, &BasicTunnel::OnVLinkUp);
             vlink_->SignalLinkDown.connect(this, &BasicTunnel::OnVLinkDown);
         }
-        return vlink_.get();
+        return vlink_;
     }
 
     void BasicTunnel::StartConnections()

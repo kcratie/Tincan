@@ -22,6 +22,7 @@
  */
 #ifndef TINCAN_BASE_H_
 #define TINCAN_BASE_H_
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
@@ -41,6 +42,7 @@
 #include <sstream>
 #include <stack>
 #include <string>
+#include <thread>
 #include <utility>
 #include <unordered_map>
 #include <vector>
@@ -50,6 +52,7 @@ namespace tincan
     using MacAddressType = std::array<uint8_t, 6>;
     using IP4AddressType = std::array<uint8_t, 4>;
     using std::array;
+    using std::atomic_bool;
     using std::cout;
     using std::deque;
     using std::endl;
@@ -76,8 +79,10 @@ namespace tincan
     using std::unique_ptr;
     using std::unordered_map;
     using std::vector;
+    using std::weak_ptr;
     using std::chrono::milliseconds;
     using std::chrono::steady_clock;
+    using std::this_thread::yield;
     class InputParser
     {
     public:
@@ -124,7 +129,7 @@ namespace tincan
         const bool kNeedsHelp;
     };
     ///////////////////////////////////////////////////////////////////////////////
-    static const uint16_t kFrameBufferSz = 1500;
+
     template <typename InputIter>
     string ByteArrayToString(
         InputIter first,

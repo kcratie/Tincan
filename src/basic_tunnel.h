@@ -49,7 +49,7 @@ namespace tincan
         int Configure(
             unique_ptr<TapDescriptor> tap_desc);
 
-        VirtualLink* CreateVlink(
+        weak_ptr<VirtualLink> CreateVlink(
             unique_ptr<PeerDescriptor> peer_desc, bool role,
             const vector<string> &ignored_list);
 
@@ -88,7 +88,7 @@ namespace tincan
         void TapReadComplete(
             Iob&& iob);
 
-        VirtualLink* Vlink() { return vlink_.get(); }
+        weak_ptr<VirtualLink> Vlink() { return vlink_; }
 
     private:
 
@@ -108,7 +108,7 @@ namespace tincan
         unique_ptr<rtc::SSLFingerprint> local_fingerprint_;
         unique_ptr<rtc::Thread>worker_;
         shared_ptr<TapDev> tdev_;
-        unique_ptr<VirtualLink> vlink_;
+        shared_ptr<VirtualLink> vlink_;
     };
 } // namespace tincan
 #endif // BASIC_TUNNEL_H_
