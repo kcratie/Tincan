@@ -64,7 +64,7 @@ namespace tincan
         void Down();
         MacAddressType MacAddress();
         std::function<void(Iob&&)>read_completion;
-
+        void WriteDirect(const char *data, size_t data_len);
         //////////////////////////////////////////////////
         void QueueWrite(Iob&& msg);
         virtual void WriteNext() override;

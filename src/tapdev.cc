@@ -137,9 +137,31 @@ namespace tincan
             RTC_LOG(LS_INFO) << ifr_.ifr_name << " is now DOWN";
         }
     }
+
+    void TapDev::WriteDirect(
+        const char *data,
+        size_t data_len)
+    {
+        int remain = data_len;
+        while (remain > 0)
+        {
+            auto nw = write(fd_, data, remain);
+            if (nw >= 0)
+            {
+                remain = -nw;
+            }
+            else
+            {
+                RTC_LOG(LS_WARNING) << "TAP write failed. "
+                                    << "data len: " << data_len << " "
+                                    << " written: " << data_len - remain << ". " << strerror(errno);
+                return;
+            }
+        }
+    }
     ///////////////////////////////////////////////////////////////////////////
     // EpollChannel interface
-    void TapDev::QueueWrite(Iob&& msg)
+    void TapDev::QueueWrite(Iob &&msg)
     {
         lock_guard<mutex> lg(sendq_mutex_);
         if (is_down_ || !IsGood())
@@ -165,7 +187,8 @@ namespace tincan
             nw = write(fd_, wiob.data(), wiob.size());
             if (nw < 0)
             {
-                RTC_LOG(LS_WARNING) << "TAP write failed. " << "iob sz:"<<wiob.size() << " " << strerror(errno);
+                RTC_LOG(LS_WARNING) << "TAP write failed. "
+                                    << "iob sz:" << wiob.size() << " " << strerror(errno);
             }
             if ((size_t)nw == wiob.size())
             {
@@ -181,7 +204,6 @@ namespace tincan
         channel_ev->events &= ~EPOLLOUT;
         epoll_ctl(epfd_, EPOLL_CTL_MOD, channel_ev->data.fd, channel_ev.get());
     }
-
 
     void TapDev::ReadNext()
     {

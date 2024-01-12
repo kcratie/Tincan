@@ -155,8 +155,7 @@ namespace tincan
         }
         return oss.str();
     }
-
-    template <typename T> // declaration only for TD;
-    class TD;             // TD == "Type Displayer"
+    // TD (Type Displayer) decl only to cause syntax error 
+    template <typename T> class TD;
 } // namespace tincan
 #endif // TINCAN_BASE_H_

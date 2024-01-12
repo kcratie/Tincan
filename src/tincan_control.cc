@@ -66,6 +66,7 @@ namespace tincan
     const Json::StaticString TincanControl::Status("Status");
     const Json::StaticString TincanControl::Success("Success");
     const Json::StaticString TincanControl::TapName("TapName");
+    const Json::StaticString TincanControl::TincanLevel("TincanLevel");
     const Json::StaticString TincanControl::TransactionId("TransactionId");
     const Json::StaticString TincanControl::TunnelId("TunnelId");
     const Json::StaticString TincanControl::Type("Type");

@@ -74,6 +74,7 @@ namespace tincan
     {
         tdev_->read_completion = [this](Iob &&iob)
         { TapReadComplete(std::move(iob)); };
+        // TD<decltype(tdev_->read_completion)> td;
     }
 
     rtc::Thread *BasicTunnel::SignalThread()
@@ -204,7 +205,8 @@ namespace tincan
     {
         auto frame = bp.get();
         frame.data(data, data_len);
-        tdev_->QueueWrite(std::move(frame));
+        // tdev_->QueueWrite(std::move(frame));
+        tdev_->WriteDirect(data, data_len);
     }
 
     void BasicTunnel::TapReadComplete(

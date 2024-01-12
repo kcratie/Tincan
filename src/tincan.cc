@@ -64,9 +64,7 @@ namespace tincan
             auto logcfg = make_unique<Json::Value>();
             if (!parser->parse(tp.log_config.c_str(), tp.log_config.c_str() + tp.log_config.length(), logcfg.get(), &errs))
             {
-                string emsg = "Unable to parse logging config - ";
-                emsg.append(tp.log_config);
-                RTC_LOG(LS_ERROR) << emsg;
+                RTC_LOG(LS_ERROR) << "Unable to parse logging config - " << tp.log_config;
             }
             TincanControl ctrl(std::move(logcfg));
             ConfigureLogging(ctrl);
@@ -79,9 +77,10 @@ namespace tincan
             (*logcfg)["MaxFileSize"] = 1048576;
             (*logcfg)["MaxArchives"] = 1;
             (*logcfg)["Device"] = "File";
-            (*logcfg)["Level"] = "WARNING";
+            (*logcfg)["TincanLevel"] = "WARNING";
             TincanControl ctrl(std::move(logcfg));
             ConfigureLogging(ctrl);
+            RTC_LOG(LS_WARNING) << "No logging config, using defaults.";
         }
         // Register signal handlers
         // todo: handle signal in epoll engine
@@ -96,7 +95,7 @@ namespace tincan
 
         channel_->ConnectToController();
 
-        // TD<decltype(tunnel_.at(""))> BasicTunnelType;
+        // TD<decltype(*tunnel_)> BasicTunnelType;
         // int x{0};
         // TD<decltype(x)> xType;
     }
@@ -261,9 +260,7 @@ namespace tincan
     {
 
         Json::Value &req = control.GetRequest();
-        string log_lvl = req[TincanControl::Level].asString();
-        string msg("Tincan logging successfully configured.");
-        bool status = true;
+        string log_lvl = req[TincanControl::TincanLevel].asString();
         try
         {
             if (req["Device"].asString() == "All" || req["Device"].asString() == "File")
@@ -290,9 +287,7 @@ namespace tincan
         {
             LogMessage::LogToDebug(LS_INFO);
             LogMessage::SetLogToStderr(true);
-            msg = "The configure logging operation failed. Using Console/WARNING";
-            RTC_LOG(LS_WARNING) << msg;
-            status = false;
+            RTC_LOG(LS_WARNING) << "Failed to configure logging, using stderr at log level INFO";
         }
     }
 

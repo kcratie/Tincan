@@ -130,6 +130,7 @@ namespace tincan
         static const Json::StaticString Stats;
         static const Json::StaticString Status;
         static const Json::StaticString Success;
+        static const Json::StaticString TincanLevel;
         static const Json::StaticString TransactionId;
         static const Json::StaticString TunnelId;
         static const Json::StaticString Type;

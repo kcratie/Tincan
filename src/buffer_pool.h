@@ -117,7 +117,7 @@ template<typename Tb>
 class BufferPool
 {
 public:
-    static const uint16_t kPoolCapacity = 256;
+    static const uint16_t kPoolCapacity = 1024;
 	~BufferPool() = default;
 	BufferPool() : cap_(kPoolCapacity), pool_(cap_)
 	{}
